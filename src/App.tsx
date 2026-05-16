@@ -15,7 +15,7 @@ import CreateProgramme from './Dashboard/Program/CreateProgramme'
 import MyProgrammes from './Dashboard/Program/MyProgrammes'
 import ProgrammeDetails from './Dashboard/Program/ProgrammeDetails'
 import { auth } from './firebase'
-// 3. Removed unused AdminDashboardPage import
+import AdminDashboardPage from './pages/AdminDashboardPage'
 import CompanyPassport from "./Dashboard/Program/CompanyPassport.tsx";
 
 // Exporting this type so other files can use it if needed
@@ -69,9 +69,11 @@ function App() {
       case 'create':
         return <CreateProgramme onNavigate={handleNavigate} />
       case 'credentials':
-        return <CredentialsUpload onNavigate={handleNavigate} />
+        return <CredentialsUpload onPassportCreated={() => setCurrentView('passport')} />
       case 'passport':
         return <CompanyPassport onBack={() => setCurrentView('dashboard')} />
+      case 'admin':
+        return <AdminDashboardPage onNavigate={handleNavigate} />
       case 'details':
         return selectedProgrammeId ? (
             <ProgrammeDetails

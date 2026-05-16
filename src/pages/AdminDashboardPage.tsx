@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Activity, Users, Link2, Clock, HelpCircle, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
 import { db } from "../firebase";
+import { runConflictDetection } from "../lib/api";
 
 export interface Conflict {
   id: string;
@@ -39,6 +39,32 @@ export interface ProgrammeData {
     sponsorConfirmed: boolean;
     venueBookingDates: string[];
   }[];
+}
+
+interface MatchActivity {
+  id: string;
+  pair: string;
+  score: number;
+  outcome: "Matched" | "Failed" | "Conflict Raised";
+  timestamp: string;
+}
+
+interface AdminData {
+  currentInteractions: Interaction[];
+  historyInteractions: Interaction[];
+  aiMatches: MatchActivity[];
+  programmeData: ProgrammeData;
+}
+
+interface ProgrammeSummary {
+  id: string;
+  name?: string;
+  description?: string;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+  entities?: string[];
+  status?: string;
 }
 
 const timeAgo = (dateStr: string) => {
@@ -209,38 +235,32 @@ const InteractionTable: React.FC<InteractionTableProps> = ({ interactions }) => 
   );
 };
 
-export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view: any) => void }) {
+export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view: 'dashboard') => void }) {
   const [activeNav, setActiveNav] = useState("Overview");
   const [conflictsLoading, setConflictsLoading] = useState(false);
   const [detectedConflicts, setDetectedConflicts] = useState<DetectedConflict[]>([]);
   const [resolvedConflicts, setResolvedConflicts] = useState<DetectedConflict[]>([]);
   const [showResolved, setShowResolved] = useState(false);
   const [activeTab, setActiveTab] = useState<"Current" | "History">("Current");
-  const [adminData, setAdminData] = useState<any>(null);
-  const [programs, setPrograms] = useState<any[]>([]);
+  const [adminData, setAdminData] = useState<AdminData | null>(null);
+  const [programs, setPrograms] = useState<ProgrammeSummary[]>([]);
 
   const navItems = ["Overview"];
 
   const detectConflicts = async () => {
     setConflictsLoading(true);
     try {
-      const response = await fetch("/conflicts.json");
-      if (!response.ok) {
-        throw new Error("Failed to fetch conflicts.json");
-      }
-      const conflictsKB: Conflict[] = await response.json();
-
       // Fetch admin data from Firebase
       const adminDocRef = doc(db, "adminData", "dashboard");
       const adminDocSnap = await getDoc(adminDocRef);
       
-      let fetchedAdminData;
+      let fetchedAdminData: AdminData;
       if (adminDocSnap.exists()) {
-        fetchedAdminData = adminDocSnap.data();
+        fetchedAdminData = adminDocSnap.data() as AdminData;
       } else {
         // Auto-seed Firebase if it's empty
         await setDoc(adminDocRef, defaultAdminData);
-        fetchedAdminData = defaultAdminData;
+        fetchedAdminData = defaultAdminData as AdminData;
       }
       setAdminData(fetchedAdminData);
 
@@ -249,62 +269,16 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
       const fetchedPrograms = querySnapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
-      }));
+      })) as ProgrammeSummary[];
       setPrograms(fetchedPrograms);
 
-      // Supply Gemini with the REAL programmes list to analyze for conflicts
-      const programmeData = fetchedPrograms;
-
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-      if (!apiKey) {
-        console.warn("VITE_GEMINI_API_KEY is not set. Simulating conflict detection for demo purposes.");
-        // Simulated fallback if key is missing
-        setTimeout(() => {
-          setDetectedConflicts([
-            { ...conflictsKB[0], detectedAt: new Date().toISOString(), status: "unresolved" },
-            { ...conflictsKB[4], detectedAt: new Date().toISOString(), status: "unresolved" }
-          ]);
-          setConflictsLoading(false);
-        }, 1500);
-        return;
-      }
-
-      const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-      const prompt = `
-        You are an ecosystem programme conflict monitor.
-        
-        Here is a knowledge base of known conflict scenarios, each with an id and description:
-        ${JSON.stringify(conflictsKB)}
-        
-        Here is the current live programme data:
-        ${JSON.stringify(programmeData)}
-        
-        Your job: read each conflict description and determine if that situation is currently occurring in the programme data.
-        
-        Return ONLY a valid JSON array of conflict IDs that are currently occurring. No explanation, no markdown, just the raw JSON array.
-        Example output: ["C001", "C003"]
-      `;
-
-      const result = await model.generateContent(prompt);
-      let raw = result.response.text().trim();
-      
-      if (raw.startsWith('```json')) {
-        raw = raw.replace(/```json/g, '').replace(/```/g, '').trim();
-      } else if (raw.startsWith('```')) {
-        raw = raw.replace(/```/g, '').trim();
-      }
-
-      const detectedIds: string[] = JSON.parse(raw);
-
-      const detected: DetectedConflict[] = conflictsKB
-        .filter((c: Conflict) => detectedIds.includes(c.id))
-        .map((c: Conflict) => ({
-          ...c,
-          detectedAt: new Date().toISOString(),
-          status: "unresolved"
-        }));
+      const result = await runConflictDetection();
+      const detected: DetectedConflict[] = result.detected.map((conflict, index) => ({
+        id: String(conflict.id || `backend-${index}`),
+        description: String(conflict.description || 'Backend guardrail conflict detected.'),
+        detectedAt: new Date().toISOString(),
+        status: "unresolved",
+      }));
 
       // Only add conflicts that are not already resolved
       setDetectedConflicts(detected.filter(d => !resolvedConflicts.some(r => r.id === d.id)));
@@ -316,7 +290,10 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
   };
 
   useEffect(() => {
-    detectConflicts();
+    const timer = window.setTimeout(() => {
+      void detectConflicts();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -531,7 +508,7 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
                 <h2 className="text-xl font-semibold text-slate-800">Recent AI Match Activity</h2>
               </div>
               <div className="p-6 space-y-5 bg-slate-50/30 flex-1">
-                {adminData?.aiMatches?.map((match: any) => (
+                {adminData?.aiMatches?.map((match) => (
                   <div key={match.id} className="flex gap-3 text-sm">
                     <div className="mt-1">
                       {match.outcome === "Matched" ? (

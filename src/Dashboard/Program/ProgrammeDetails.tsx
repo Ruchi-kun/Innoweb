@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Briefcase, Loader2, Star, Target, Users, Mail } from 'lucide-react';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Added collection and getDocs
+import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { runProgrammeMatching, type ProgrammeMatch } from '../../lib/api';
 
 interface ProgrammeDetailsProps {
     programmeId: string;
@@ -26,12 +27,43 @@ interface Participant {
     role: string;
     expertise: string;
     company: string;
+    score?: number;
 }
 
 export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeDetailsProps) {
     const [programme, setProgramme] = useState<Programme | null>(null);
-    const [participants, setParticipants] = useState<Participant[]>([]); // New state for real data
+    const [participants, setParticipants] = useState<Participant[]>([]);
     const [loading, setLoading] = useState(true);
+    const [matching, setMatching] = useState(false);
+
+    const buildParticipantsFromMatches = async (matches: ProgrammeMatch[]) => {
+        const companiesSnapshot = await getDocs(collection(db, "companies"));
+        const companiesById = new Map(companiesSnapshot.docs.map((companyDoc) => [companyDoc.id, companyDoc.data()]));
+        return matches.map((match) => {
+            const company = companiesById.get(match.companyId);
+            const vectors = company?.extractedVectors || {};
+            return {
+                id: match.companyId,
+                name: company?.companyName || 'Unknown Company',
+                role: vectors.companyType || 'Company',
+                expertise: vectors.primaryIndustry || 'Not specified',
+                company: company?.companyName || 'Unknown Company',
+                score: match.score,
+            };
+        });
+    };
+
+    const runMatching = async () => {
+        setMatching(true);
+        try {
+            const result = await runProgrammeMatching(programmeId);
+            setParticipants(await buildParticipantsFromMatches(result.matches));
+        } catch (error) {
+            console.error("Error running matching:", error);
+        } finally {
+            setMatching(false);
+        }
+    };
 
     useEffect(() => {
         const fetchAllData = async () => {
@@ -43,15 +75,6 @@ export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeD
                 if (docSnap.exists()) {
                     setProgramme({ id: docSnap.id, ...docSnap.data() } as Programme);
                 }
-
-                // 2. Fetch all Participants from your 'participants' collection
-                const querySnapshot = await getDocs(collection(db, "participants"));
-                const participantsList = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })) as Participant[];
-
-                setParticipants(participantsList);
 
             } catch (error) {
                 console.error("Error fetching from Firebase:", error);
@@ -141,9 +164,23 @@ export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeD
                             <Users className="text-blue-600" size={24} />
                             Compatible Participants
                         </h2>
-                        <p className="text-slate-500 text-sm mt-1">Found {participants.length} matches from your database.</p>
+                        <p className="text-slate-500 text-sm mt-1">Found {participants.length} backend-ranked matches from your database.</p>
                     </div>
+                    <button
+                        onClick={runMatching}
+                        disabled={matching}
+                        className="bg-[#3b4256] hover:bg-[#2d3142] disabled:bg-slate-400 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                    >
+                        {matching && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Run Matching
+                    </button>
                 </div>
+
+                {participants.length === 0 && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-8 text-center mb-6">
+                        <p className="text-slate-600">Run matching to generate ranked proposals for this programme.</p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {participants.map((person) => (
@@ -181,7 +218,9 @@ export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeD
                             <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
                                 <div className="flex items-center gap-1">
                                     <Star size={12} className="text-amber-400 fill-amber-400" />
-                                    <span className="text-[10px] font-bold text-slate-400 tracking-wide">TOP MATCH</span>
+                                    <span className="text-[10px] font-bold text-slate-400 tracking-wide">
+                                        {person.score ? `${person.score}% MATCH` : 'MATCH'}
+                                    </span>
                                 </div>
                                 <button className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-full transition-colors">
                                     <Mail size={16} />

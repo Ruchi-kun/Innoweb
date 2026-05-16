@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from './firebase';
-import { getStructuredGeminiModel } from './lib/gemini';
-import type { StartupEcosystemNode } from './schema';
 import VerificationAssistant from './VerificationAssistant';
+import { analyzeIntake } from './lib/api';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
-export default function CredentialsUpload() {
+interface CredentialsUploadProps {
+  onPassportCreated?: () => void;
+}
+
+export default function CredentialsUpload({ onPassportCreated }: CredentialsUploadProps) {
   const [status, setStatus] = useState<'idle' | 'analyzing' | 'success' | 'chat'>('idle');
   const [isDragging, setIsDragging] = useState(false);
   const [linkInput, setLinkInput] = useState('');
@@ -19,6 +20,35 @@ export default function CredentialsUpload() {
   const [loadingText, setLoadingText] = useState('Initializing AI...');
   
   const [missingReasoning, setMissingReasoning] = useState('');
+  const [intakeSessionId, setIntakeSessionId] = useState('');
+  const [createdPassportId, setCreatedPassportId] = useState('');
+
+  const runVerification = async (params: {
+    sourceType: 'pdf_text' | 'drive_link';
+    content: string;
+    fileName?: string;
+  }) => {
+    setLoadingText('Analyzing credentials...');
+    setStatus('analyzing');
+
+    try {
+      const result = await analyzeIntake(params);
+
+      if (result.status === 'verified') {
+        setCreatedPassportId(result.passportId || '');
+        setStatus('success');
+      } else {
+        setMissingReasoning(result.missingFieldsReasoning || 'Please provide the missing company details.');
+        setIntakeSessionId(result.sessionId || '');
+        setStatus('chat');
+      }
+    } catch (err) {
+      console.error(err);
+      const message = err instanceof Error ? err.message : 'An error occurred during analysis.';
+      alert(`Verification failed: ${message}`);
+      setStatus('idle');
+    }
+  };
 
   React.useEffect(() => {
     if (status !== 'analyzing') return;
@@ -70,8 +100,13 @@ export default function CredentialsUpload() {
         extractedText += pageText + '\n';
       }
 
-      setFileContext(`[Extracted from ${file.name}]:\n${extractedText}`);
-      setStatus('idle');
+      const context = `[Extracted from ${file.name}]:\n${extractedText}`;
+      setFileContext(context);
+      await runVerification({
+        sourceType: 'pdf_text',
+        content: context,
+        fileName: file.name,
+      });
     } catch (err) {
       console.error("PDF extraction error:", err);
       alert("Could not read the PDF file. Please ensure it is a valid text-searchable PDF.");
@@ -117,58 +152,23 @@ export default function CredentialsUpload() {
       return;
     }
 
-    setLoadingText('Analyzing...');
-    setStatus('analyzing');
-
-    try {
-      const model = getStructuredGeminiModel();
-      const prompt = `
-        You are an AI analyzing company credentials for an innovation ecosystem.
-        This must work for any company type, including startups, SMEs, corporations, mentors, sponsors, vendors, nonprofits, and ecosystem partners.
-        Extract the required company data markers based on this input: "${finalContext}".
-        If the input is just a Google Drive link, you might not have enough information. 
-        If there is not enough information to fill ALL required vectors (Company Name, Company Type, Primary Industry, Operating Stage, Key Capabilities, Operational Needs, Target Markets, and Business Model), set isDataSufficient to false and explain what is missing in missingFieldsReasoning.
-      `;
-
-      const result = await model.generateContent(prompt);
-      const textResponse = result.response.text();
-      const parsedData = JSON.parse(textResponse) as StartupEcosystemNode;
-
-      if (parsedData.isDataSufficient) {
-        await saveToFirestore(parsedData);
-        setStatus('success');
-      } else {
-        setMissingReasoning(parsedData.missingFieldsReasoning);
-        setStatus('chat');
-      }
-    } catch (err) {
-      console.error(err);
-      alert("An error occurred during analysis.");
-      setStatus('idle');
-    }
-  };
-
-  const saveToFirestore = async (data: StartupEcosystemNode) => {
-    try {
-      await addDoc(collection(db, 'companies'), {
-        ...data,
-        createdAt: new Date()
-      });
-    } catch (e) {
-      console.error("Error adding document: ", e);
-    }
+    await runVerification({
+      sourceType: linkInput ? 'drive_link' : 'pdf_text',
+      content: finalContext,
+      fileName: fileName || linkInput || undefined,
+    });
   };
 
   if (status === 'chat') {
     return (
       <VerificationAssistant 
+        sessionId={intakeSessionId}
         initialMissingReasoning={missingReasoning}
-        fileOrLinkContext={linkInput ? `Google Drive Link: ${linkInput}` : fileContext}
         fileName={fileName || linkInput}
         fileSize={fileSize}
-        onComplete={async (data) => {
-          setStatus('analyzing'); // show loading briefly
-          await saveToFirestore(data);
+        onComplete={async (result) => {
+          setCreatedPassportId(result.passportId || '');
+          setStatus('analyzing');
           setStatus('success');
         }}
       />
@@ -185,11 +185,22 @@ export default function CredentialsUpload() {
         </div>
         <h2 className="text-3xl font-bold text-slate-800 mb-4">Verification Complete</h2>
         <p className="text-slate-500 mb-8 max-w-md">
-          Your credentials have been successfully analyzed and the company profile has been securely saved to our database.
+          Your credentials have been analyzed, and a company passport has been created in Firestore.
         </p>
+        {createdPassportId && (
+          <p className="text-slate-400 text-xs mb-6 font-mono">Passport ID: {createdPassportId}</p>
+        )}
+        {onPassportCreated && (
+          <button
+            onClick={onPassportCreated}
+            className="bg-[#3B4569] text-white px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-[#2D3552] transition-colors mb-3"
+          >
+            View Passport
+          </button>
+        )}
         <button 
-          onClick={() => { setStatus('idle'); setLinkInput(''); setFileName(''); setFileContext(''); }}
-          className="bg-[#3B4569] text-white px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-[#2D3552] transition-colors"
+          onClick={() => { setStatus('idle'); setLinkInput(''); setFileName(''); setFileContext(''); setCreatedPassportId(''); }}
+          className="bg-white border border-slate-200 text-slate-700 px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-slate-50 transition-colors"
         >
           Upload Another
         </button>
