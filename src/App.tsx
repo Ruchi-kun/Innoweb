@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   LogOut,
   Plus,
+  Settings,
 } from 'lucide-react'
 import Auth from './Auth'
 import CredentialsUpload from './CredentialsUpload'
@@ -14,8 +15,9 @@ import CreateProgramme from './Dashboard/Program/CreateProgramme'
 import MyProgrammes from './Dashboard/Program/MyProgrammes'
 import ProgrammeDetails from './Dashboard/Program/ProgrammeDetails'
 import { auth } from './firebase'
+import AdminDashboardPage from './pages/AdminDashboardPage'
 
-type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'details'
+type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'details' | 'admin'
 
 const navItems: Array<{
   view: AppView
@@ -26,6 +28,7 @@ const navItems: Array<{
   { view: 'programmes', label: 'Programmes', icon: Briefcase },
   { view: 'create', label: 'Create', icon: Plus },
   { view: 'credentials', label: 'Credentials', icon: FileCheck2 },
+  { view: 'admin', label: 'Admin', icon: Settings },
 ]
 
 function App() {
@@ -75,6 +78,8 @@ function App() {
                 }}
             />
         )
+      case 'admin':
+        return <AdminDashboardPage onNavigate={setCurrentView} />
       default:
         return <Dashboard onNavigate={setCurrentView} />
     }
