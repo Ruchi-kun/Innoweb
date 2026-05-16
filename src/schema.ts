@@ -1,21 +1,25 @@
 import { z } from "zod";
 
-export const StartupEcosystemNodeSchema = z.object({
+export const CompanyEcosystemNodeSchema = z.object({
   companyName: z.string(),
   isDataSufficient: z.boolean(),
   missingFieldsReasoning: z.string(),
   extractedVectors: z.object({
-    primaryVertical: z.string(),
-    operationalStage: z.enum(["Idea", "MVP", "Early Traction", "Scaling"]),
-    operationalBottlenecks: z.array(z.string()),
+    companyType: z.string(),
+    primaryIndustry: z.string(),
+    operatingStage: z.string(),
+    keyCapabilities: z.array(z.string()),
+    operationalNeeds: z.array(z.string()),
     targetMarkets: z.array(z.string()),
-    coreTechStack: z.array(z.string()).optional(),
-    businessModel: z.enum(["B2B", "B2C", "B2B2C", "Marketplace", "D2C"]),
+    businessModel: z.string(),
+    productsOrServices: z.array(z.string()).optional(),
     targetCorporateSectors: z.array(z.string()).optional(),
     fundingTargetMYR: z.number().nullable().optional(),
     teamGaps: z.array(z.string()).optional(),
-    regulatoryRequirements: z.array(z.string()).optional()
+    regulatoryRequirements: z.array(z.string()).optional(),
+    partnershipGoals: z.array(z.string()).optional()
   })
 });
 
-export type StartupEcosystemNode = z.infer<typeof StartupEcosystemNodeSchema>;
+export type CompanyEcosystemNode = z.infer<typeof CompanyEcosystemNodeSchema>;
+export type StartupEcosystemNode = CompanyEcosystemNode;
