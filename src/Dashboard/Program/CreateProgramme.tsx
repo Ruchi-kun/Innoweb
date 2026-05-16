@@ -1,11 +1,66 @@
-
-import { CreditCard, HelpCircle, ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
+import { CreditCard, HelpCircle, ArrowLeft, Loader2 } from 'lucide-react';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '../../firebase'; // Make sure this path is correct for your structure!
 
 interface CreateProgrammeProps {
     onNavigate: (view: 'dashboard' | 'programmes' | 'create') => void;
 }
 
 export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
+    // 1. Form State setup
+    const [name, setName] = useState('');
+    const [description, setDescription] = useState('');
+    const [type, setType] = useState('Mentorship');
+    const [startDate, setStartDate] = useState('');
+    const [endDate, setEndDate] = useState('');
+    const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
+
+    // Loading state for the submit button
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Helper function to toggle multiple entities on/off
+    const toggleEntity = (entity: string) => {
+        if (selectedEntities.includes(entity)) {
+            setSelectedEntities(selectedEntities.filter(e => e !== entity));
+        } else {
+            setSelectedEntities([...selectedEntities, entity]);
+        }
+    };
+
+    // 2. Submit handler to push data to Firebase
+    const handleSubmit = async () => {
+        // Basic validation
+        if (!name || !description || !startDate || !endDate) {
+            alert("Please fill out all the fields before creating.");
+            return;
+        }
+
+        setIsSubmitting(true);
+
+        try {
+            // Push the new document to the "programmes" collection
+            await addDoc(collection(db, "programmes"), {
+                name: name,
+                description: description,
+                type: type,
+                startDate: startDate,
+                endDate: endDate,
+                entities: selectedEntities,
+                status: "Active" // Defaulting new programmes to Active
+            });
+
+            // Once successful, send the user back to the Programmes grid to see it!
+            onNavigate('programmes');
+
+        } catch (error) {
+            console.error("Error adding document: ", error);
+            alert("Failed to create the programme. Check console for details.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <main className="flex-1 flex flex-col h-full relative overflow-y-auto">
 
@@ -58,22 +113,38 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
                         {/* Programme Name */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Programme Name</label>
-                            <input type="text" placeholder="e.g. Summer Startup Accelerator 2024" className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all"/>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="e.g. Summer Startup Accelerator 2024"
+                                className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all"
+                            />
                         </div>
 
                         {/* Description */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
-                            <textarea rows={4} placeholder="Describe the programme objectives and benefits..." className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all resize-none"></textarea>
+                            <textarea
+                                rows={4}
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Describe the programme objectives and benefits..."
+                                className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all resize-none"
+                            ></textarea>
                         </div>
 
                         {/* Type */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Type</label>
-                            <select className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all appearance-none cursor-pointer">
-                                <option>Mentorship</option>
-                                <option>Accelerator</option>
-                                <option>Grant</option>
+                            <select
+                                value={type}
+                                onChange={(e) => setType(e.target.value)}
+                                className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all appearance-none cursor-pointer"
+                            >
+                                <option value="Mentorship">Mentorship</option>
+                                <option value="Accelerator">Accelerator</option>
+                                <option value="Grant">Grant</option>
                             </select>
                         </div>
 
@@ -81,28 +152,52 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1.5">Start Date</label>
-                                <input type="text" placeholder="mm/dd/yyyy" className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all"/>
+                                <input
+                                    type="text"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    placeholder="mm/dd/yyyy"
+                                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all"
+                                />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1.5">End Date</label>
-                                <input type="text" placeholder="mm/dd/yyyy" className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all"/>
+                                <input
+                                    type="text"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    placeholder="mm/dd/yyyy"
+                                    className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-800/20 focus:border-slate-800 transition-all"
+                                />
                             </div>
                         </div>
 
-                        {/* Required Entities */}
+                        {/* Required Entities (Toggleable Buttons) */}
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-2">Required Entity Type</label>
+                            <label className="block text-sm font-medium text-slate-700 mb-2">Required Entity Type (Select multiple)</label>
                             <div className="flex items-center gap-2">
-                                <button className="px-5 py-1.5 rounded-full bg-[#3b4256] text-white text-sm font-medium transition-colors">Startup</button>
-                                <button className="px-5 py-1.5 rounded-full bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition-colors">Mentor</button>
-                                <button className="px-5 py-1.5 rounded-full bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition-colors">Sponsor</button>
-                                <button className="px-5 py-1.5 rounded-full bg-slate-100 text-slate-600 text-sm font-medium hover:bg-slate-200 transition-colors">Venue</button>
+                                {['Startup', 'Mentor', 'Sponsor', 'Venue'].map((entity) => {
+                                    const isSelected = selectedEntities.includes(entity);
+                                    return (
+                                        <button
+                                            key={entity}
+                                            onClick={() => toggleEntity(entity)}
+                                            className={`px-5 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                                                isSelected
+                                                    ? 'bg-[#3b4256] text-white'
+                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                                            }`}
+                                        >
+                                            {entity}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
 
                         <div className="h-px w-full bg-slate-100 my-2"></div>
 
-                        {/* Payment Details */}
+                        {/* Payment Details (UI Only for now) */}
                         <div>
                             <div className="flex items-center gap-2 mb-4">
                                 <CreditCard size={18} className="text-slate-700" />
@@ -131,10 +226,18 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
                     {/* Submit Button */}
                     <div className="p-4 bg-white border-t border-slate-100">
                         <button
-                            onClick={() => onNavigate('programmes')}
-                            className="w-full bg-[#3b4256] hover:bg-[#2d3142] text-white rounded-lg py-3.5 text-sm font-semibold transition-colors shadow-sm"
+                            onClick={handleSubmit}
+                            disabled={isSubmitting}
+                            className="w-full bg-[#3b4256] hover:bg-[#2d3142] disabled:bg-slate-400 text-white rounded-lg py-3.5 text-sm font-semibold transition-colors shadow-sm flex items-center justify-center gap-2"
                         >
-                            Create Programme
+                            {isSubmitting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                    Creating...
+                                </>
+                            ) : (
+                                "Create Programme"
+                            )}
                         </button>
                     </div>
                 </div>
