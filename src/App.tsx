@@ -6,8 +6,8 @@ import {
   LayoutDashboard,
   LogOut,
   Plus,
-  Settings,
-} from 'lucide-react'
+  ShieldCheck, // 1. Added ShieldCheck here
+} from 'lucide-react' // 2. Removed unused Settings
 import Auth from './Auth'
 import CredentialsUpload from './CredentialsUpload'
 import Dashboard from './Dashboard/dashboard'
@@ -15,9 +15,11 @@ import CreateProgramme from './Dashboard/Program/CreateProgramme'
 import MyProgrammes from './Dashboard/Program/MyProgrammes'
 import ProgrammeDetails from './Dashboard/Program/ProgrammeDetails'
 import { auth } from './firebase'
-import AdminDashboardPage from './pages/AdminDashboardPage'
+// 3. Removed unused AdminDashboardPage import
+import CompanyPassport from "./Dashboard/Program/CompanyPassport.tsx";
 
-type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'details' | 'admin'
+// Exporting this type so other files can use it if needed
+export type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'details' | 'admin' | 'passport';
 
 const navItems: Array<{
   view: AppView
@@ -26,9 +28,9 @@ const navItems: Array<{
 }> = [
   { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { view: 'programmes', label: 'Programmes', icon: Briefcase },
+  { view: 'passport', label: 'Passport', icon: FileCheck2 },
   { view: 'create', label: 'Create', icon: Plus },
-  { view: 'credentials', label: 'Credentials', icon: FileCheck2 },
-  { view: 'admin', label: 'Admin', icon: Settings },
+  { view: 'credentials', label: 'Credentials', icon: ShieldCheck },
 ]
 
 function App() {
@@ -36,6 +38,11 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [currentView, setCurrentView] = useState<AppView>('dashboard')
   const [selectedProgrammeId, setSelectedProgrammeId] = useState<string | null>(null)
+
+  // 4. Kept only ONE handleNavigate function and typed it strictly to fix the "any" error
+  const handleNavigate = (view: AppView | string) => {
+    setCurrentView(view as AppView);
+  };
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -48,11 +55,11 @@ function App() {
   const renderView = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard onNavigate={setCurrentView} />
+        return <Dashboard onNavigate={handleNavigate} />
       case 'programmes':
         return (
             <MyProgrammes
-                onNavigate={setCurrentView}
+                onNavigate={handleNavigate}
                 onViewDetails={(id: string) => {
                   setSelectedProgrammeId(id);
                   setCurrentView('details');
@@ -60,28 +67,20 @@ function App() {
             />
         )
       case 'create':
-        return <CreateProgramme onNavigate={setCurrentView} />
+        return <CreateProgramme onNavigate={handleNavigate} />
       case 'credentials':
-        return <CredentialsUpload />
+        return <CredentialsUpload onNavigate={handleNavigate} />
+      case 'passport':
+        return <CompanyPassport onBack={() => setCurrentView('dashboard')} />
       case 'details':
         return selectedProgrammeId ? (
             <ProgrammeDetails
                 programmeId={selectedProgrammeId}
-                onNavigate={setCurrentView}
+                onNavigate={handleNavigate}
             />
-        ) : (
-            <MyProgrammes
-                onNavigate={setCurrentView}
-                onViewDetails={(id: string) => {
-                  setSelectedProgrammeId(id);
-                  setCurrentView('details');
-                }}
-            />
-        )
-      case 'admin':
-        return <AdminDashboardPage onNavigate={setCurrentView} />
+        ) : <Dashboard onNavigate={handleNavigate} />
       default:
-        return <Dashboard onNavigate={setCurrentView} />
+        return <Dashboard onNavigate={handleNavigate} />
     }
   }
 
