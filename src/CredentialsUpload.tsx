@@ -147,56 +147,22 @@ export default function CredentialsUpload({ onPassportCreated }: CredentialsUplo
       return;
     }
 
-    setLoadingText('Analyzing...');
-    setStatus('analyzing');
-
-    try {
-      const model = getStructuredGeminiModel();
-      const prompt = `
-        You are an AI analyzing company credentials for an innovation ecosystem.
-        Extract the required company data markers based on this input: "${finalContext}".
-        If there is not enough information to fill ALL required vectors, set isDataSufficient to false and explain what is missing in missingFieldsReasoning.
-      `;
-
-      const result = await model.generateContent(prompt);
-      const textResponse = result.response.text();
-      const parsedData = JSON.parse(textResponse) as StartupEcosystemNode;
-
-      if (parsedData.isDataSufficient) {
-        await saveToFirestore(parsedData);
-        setStatus('success');
-      } else {
-        setMissingReasoning(parsedData.missingFieldsReasoning);
-        setStatus('chat');
-      }
-    } catch (err) {
-      console.error(err);
-      alert("An error occurred during analysis.");
-      setStatus('idle');
-    }
-  };
-
-  const saveToFirestore = async (data: StartupEcosystemNode) => {
-    try {
-      await addDoc(collection(db, 'companies'), {
-        ...data,
-        createdAt: new Date()
-      });
-    } catch (e) {
-      console.error("Error adding document: ", e);
-    }
+    await runVerification({
+      sourceType: linkInput ? 'drive_link' : 'pdf_text',
+      content: finalContext,
+      fileName: fileName || linkInput || undefined,
+    });
   };
 
   if (status === 'chat') {
     return (
         <VerificationAssistant
+            sessionId={intakeSessionId}
             initialMissingReasoning={missingReasoning}
-            fileOrLinkContext={linkInput ? `Google Drive Link: ${linkInput}` : fileContext}
             fileName={fileName || linkInput}
             fileSize={fileSize}
-            onComplete={async (data) => {
-              setStatus('analyzing');
-              await saveToFirestore(data);
+            onComplete={(result) => {
+              setCreatedPassportId(result.passportId || '');
               setStatus('success');
             }}
         />
@@ -221,11 +187,22 @@ export default function CredentialsUpload({ onPassportCreated }: CredentialsUplo
               </div>
               <h2 className="text-3xl font-bold text-slate-800 mb-4">Verification Complete</h2>
               <p className="text-slate-500 mb-8 max-w-md">
-                Your credentials have been successfully analyzed and the company profile has been securely saved.
+                Your credentials have been analyzed, and a company passport has been created in Firestore.
               </p>
+              {createdPassportId && (
+                  <p className="text-slate-400 text-xs mb-6 font-mono">Passport ID: {createdPassportId}</p>
+              )}
+              {onPassportCreated && (
+                  <button
+                      onClick={onPassportCreated}
+                      className="bg-[#3B4569] text-white px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-[#2D3552] transition-colors mb-3"
+                  >
+                    View Passport
+                  </button>
+              )}
               <button
-                  onClick={() => { setStatus('idle'); setLinkInput(''); setFileName(''); setFileContext(''); }}
-                  className="bg-[#3B4569] text-white px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-[#2D3552] transition-colors"
+                  onClick={() => { setStatus('idle'); setLinkInput(''); setFileName(''); setFileContext(''); setCreatedPassportId(''); }}
+                  className="bg-white border border-slate-200 text-slate-700 px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-slate-50 transition-colors"
               >
                 Upload Another
               </button>

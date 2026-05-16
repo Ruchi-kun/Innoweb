@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore'; // Only need onSnapshot for real-time
-import { Plus, Calendar, Users, MoreHorizontal, ArrowRight, Zap, Loader2 } from 'lucide-react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import './MyProgrammesModern.css';
@@ -22,7 +20,7 @@ interface Programme {
     imageUrl?: string;
 }
 
-export default function MyProgrammes({ onNavigate, onViewDetails }: MyProgrammesProps) {
+export default function MyProgrammes({ onViewDetails }: MyProgrammesProps) {
     const [programmes, setProgrammes] = useState<Programme[]>([]);
     const [loading, setLoading] = useState(true);
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -56,27 +54,10 @@ export default function MyProgrammes({ onNavigate, onViewDetails }: MyProgrammes
         };
         window.addEventListener('mousemove', handleMove);
         return () => window.removeEventListener('mousemove', handleMove);
-        const unsubscribe = onSnapshot(
-            collection(db, "programmes"),
-            (querySnapshot) => {
-                const programmesData: Programme[] = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data() as Omit<Programme, 'id'>
-                }));
-                setProgrammes(programmesData);
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Error fetching programmes: ", error);
-                setLoading(false);
-            },
-        );
-
-        return () => unsubscribe();
     }, []);
 
     // Helper function to get high-quality thematic images
-    const getStockImage = (type: string, index: number) => {
+    const getStockImage = (type: string) => {
         const typeLower = type?.toLowerCase() || '';
         const images = {
             accelerator: '1559136555-9303baea8ebd',
@@ -120,7 +101,7 @@ export default function MyProgrammes({ onNavigate, onViewDetails }: MyProgrammes
             </div>
 
             <div className="modern-grid">
-                {programmes.map((prog, index) => (
+                {programmes.map((prog) => (
                     <article
                         key={prog.id}
                         className="programme-card"
@@ -129,7 +110,7 @@ export default function MyProgrammes({ onNavigate, onViewDetails }: MyProgrammes
                         onClick={() => onViewDetails(prog.id)}
                     >
                         <img
-                            src={prog.imageUrl || getStockImage(prog.type, index)}
+                            src={prog.imageUrl || getStockImage(prog.type)}
                             alt={prog.name}
                             className="card-bg-image"
                         />
