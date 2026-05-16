@@ -1,0 +1,42 @@
+[
+  {
+    "id": "C001",
+    "description": "A mentor has been assigned to more companies than they can handle, reducing engagement quality."
+  },
+  {
+    "id": "C002",
+    "description": "A sponsor has not confirmed their commitment within the expected timeframe, putting funded companies at risk."
+  },
+  {
+    "id": "C003",
+    "description": "Two programmes have been scheduled at the same venue on overlapping dates."
+  },
+  {
+    "id": "C004",
+    "description": "A mentor has been matched to a startup outside their stated sector expertise."
+  },
+  {
+    "id": "C005",
+    "description": "A company in the programme has incomplete or unverified credentials, blocking their participation."
+  },
+  {
+    "id": "C006",
+    "description": "A mentor has been assigned to more companies than they can handle, reducing engagement quality."
+  },
+  {
+    "id": "C007",
+    "description": "A sponsor has not confirmed their commitment within the expected timeframe, putting funded companies at risk."
+  },
+  {
+    "id": "C008",
+    "description": "Two programmes have been scheduled at the same venue on overlapping dates."
+  },
+  {
+    "id": "C009",
+    "description": "A mentor has been matched to a startup outside their stated sector expertise."
+  },
+  {
+    "id": "C010",
+    "description": "A company in the programme has incomplete or unverified credentials, blocking their participation."
+  }
+]
