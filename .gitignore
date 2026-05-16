@@ -25,9 +25,9 @@ dist-ssr
 
 .env
 .env*
-creds.json
+.creds.json
 
-# Python bytecode files
+# Python bytecode filesdsad
 __pycache__/
 *.py[cod]
 *$py.class
