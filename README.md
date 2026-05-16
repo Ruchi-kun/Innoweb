@@ -121,8 +121,8 @@ The matching engine resolves constraints natively. The intake pipeline self-corr
 **State tree.** An `EcosystemConfig` is a set of `ProgrammeRules`, each holding participant eligibility, conflict constraints, and a compatibility predicate tree. The Google ADK agent layer reads this tree at match-time to score, filter, and dispatch candidates via the Google API integration layer.
 
 ```mermaid
-graph TD
-    Innoweb["🌐 Innoweb Platform"]
+graph LR
+    Innoweb["🌐 Innoweb"]
 
     Innoweb --> MatchingEngine["Matching Engine"]
     Innoweb --> IntakePipeline["Intake Pipeline"]
@@ -132,23 +132,23 @@ graph TD
 
     MatchingEngine --> ConflictGuardrails["Conflict Guardrails"]
     MatchingEngine --> CompatibilityScorer["Compatibility Scorer"]
-    MatchingEngine --> MatchProposal["Match Proposal Dispatcher"]
+    MatchingEngine --> MatchProposal["Match Dispatcher"]
 
-    IntakePipeline --> AIValidator["AI Data Validator"]
+    IntakePipeline --> AIValidator["AI Validator"]
     IntakePipeline --> ChatbotReconciler["Chatbot Reconciler"]
-    IntakePipeline --> DataExtractor["Auto Data Extractor"]
+    IntakePipeline --> DataExtractor["Data Extractor"]
 
-    PassportSystem --> ProfileBuilder["Profile Auto-Builder"]
+    PassportSystem --> ProfileBuilder["Profile Builder"]
     PassportSystem --> EngagementLogger["Engagement Logger"]
 
     CommunicationHub --> AutoMail["Auto-Mail"]
     CommunicationHub --> AutoSchedule["Auto-Schedule"]
-    CommunicationHub --> AutoMeet["Auto-Meet Link"]
-    CommunicationHub --> EngagementAlerts["Engagement Alerts"]
+    CommunicationHub --> AutoMeet["Auto-Meet"]
+    CommunicationHub --> EngagementAlerts["Alerts"]
 
-    ProgrammeLayer --> TrackSelector["AI Track Recommender"]
-    ProgrammeLayer --> AuditTrail["Match Audit Trail"]
-    ProgrammeLayer --> HealthDashboard["Ecosystem Health Dashboard"]
+    ProgrammeLayer --> TrackSelector["Track Recommender"]
+    ProgrammeLayer --> AuditTrail["Audit Trail"]
+    ProgrammeLayer --> HealthDashboard["Health Dashboard"]
 
     style Innoweb fill:#1a202c,stroke:#4a5568,color:#fff
     style MatchingEngine fill:#2d3748,stroke:#4a5568,color:#fff
