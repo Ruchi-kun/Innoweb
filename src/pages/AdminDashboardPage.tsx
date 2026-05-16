@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { Activity, Users, Link2, Clock, HelpCircle, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { db } from "../firebase";
 
 export interface Conflict {
   id: string;
@@ -53,26 +55,38 @@ const timeAgo = (dateStr: string) => {
   return `${days} day${days !== 1 ? 's' : ''} ago`;
 };
 
-const dummyCurrentInteractions: Interaction[] = [
-  { id: "I001", companyName: "Rocketlab Sdn Bhd", entityType: "Startup", interactionType: "Match Request", status: "Active", date: "2026-05-16" },
-  { id: "I002", companyName: "TechVentures", entityType: "Mentor", interactionType: "Programme Join", status: "Pending", date: "2026-05-15" },
-  { id: "I003", companyName: "CorporateX", entityType: "Sponsor", interactionType: "Commitment Confirmation", status: "Failed", date: "2026-05-14" },
-  { id: "I004", companyName: "BookedSpace KL", entityType: "Venue", interactionType: "Venue Booking", status: "Active", date: "2026-05-16" }
-];
-
-const dummyHistoryInteractions: Interaction[] = [
-  { id: "H001", companyName: "NovaMed", entityType: "Startup", interactionType: "Programme Completed", status: "Completed", date: "2026-04-30" },
-  { id: "H002", companyName: "MentorCo", entityType: "Mentor", interactionType: "Match Completed", status: "Completed", date: "2026-04-28" },
-  { id: "H003", companyName: "FundersInc", entityType: "Sponsor", interactionType: "Sponsorship Delivered", status: "Completed", date: "2026-04-25" }
-];
-
-const dummyAiMatches = [
-  { id: "M1", pair: "Rocketlab Sdn Bhd ↔ TechVentures", score: 92, outcome: "Matched", timestamp: "2026-05-16T10:00:00Z" },
-  { id: "M2", pair: "NovaMed ↔ MentorCo", score: 88, outcome: "Matched", timestamp: "2026-05-15T14:30:00Z" },
-  { id: "M3", pair: "GreenTech ↔ CorporateX", score: 45, outcome: "Failed", timestamp: "2026-05-14T09:15:00Z" },
-  { id: "M4", pair: "EduStartup ↔ ExpertMentor", score: 85, outcome: "Conflict Raised", timestamp: "2026-05-13T16:45:00Z" },
-  { id: "M5", pair: "HealthPlus ↔ MentorCo", score: 95, outcome: "Matched", timestamp: "2026-05-12T11:20:00Z" }
-];
+const defaultAdminData = {
+  currentInteractions: [
+    { id: "I001", companyName: "Rocketlab Sdn Bhd", entityType: "Startup", interactionType: "Match Request", status: "Active", date: "2026-05-16" },
+    { id: "I002", companyName: "TechVentures", entityType: "Mentor", interactionType: "Programme Join", status: "Pending", date: "2026-05-15" },
+    { id: "I003", companyName: "CorporateX", entityType: "Sponsor", interactionType: "Commitment Confirmation", status: "Failed", date: "2026-05-14" },
+    { id: "I004", companyName: "BookedSpace KL", entityType: "Venue", interactionType: "Venue Booking", status: "Active", date: "2026-05-16" }
+  ],
+  historyInteractions: [
+    { id: "H001", companyName: "NovaMed", entityType: "Startup", interactionType: "Programme Completed", status: "Completed", date: "2026-04-30" },
+    { id: "H002", companyName: "MentorCo", entityType: "Mentor", interactionType: "Match Completed", status: "Completed", date: "2026-04-28" },
+    { id: "H003", companyName: "FundersInc", entityType: "Sponsor", interactionType: "Sponsorship Delivered", status: "Completed", date: "2026-04-25" }
+  ],
+  aiMatches: [
+    { id: "M1", pair: "Rocketlab Sdn Bhd ↔ TechVentures", score: 92, outcome: "Matched", timestamp: "2026-05-16T10:00:00Z" },
+    { id: "M2", pair: "NovaMed ↔ MentorCo", score: 88, outcome: "Matched", timestamp: "2026-05-15T14:30:00Z" },
+    { id: "M3", pair: "GreenTech ↔ CorporateX", score: 45, outcome: "Failed", timestamp: "2026-05-14T09:15:00Z" },
+    { id: "M4", pair: "EduStartup ↔ ExpertMentor", score: 85, outcome: "Conflict Raised", timestamp: "2026-05-13T16:45:00Z" },
+    { id: "M5", pair: "HealthPlus ↔ MentorCo", score: 95, outcome: "Matched", timestamp: "2026-05-12T11:20:00Z" }
+  ],
+  programmeData: {
+    name: "MyHack 2026 Accelerator",
+    totalCompanies: 12,
+    activeConnections: 8,
+    pendingMatches: 3,
+    companies: [
+      { name: "Rocketlab Sdn Bhd", entityType: "Startup", sector: "Deeptech", mentorLoad: 4, credentialsVerified: false, sponsorConfirmed: true, venueBookingDates: ["2026-05-16", "2026-05-17"] },
+      { name: "TechVentures", entityType: "Mentor", sector: "Fintech", mentorLoad: 5, credentialsVerified: true, sponsorConfirmed: true, venueBookingDates: [] },
+      { name: "CorporateX", entityType: "Sponsor", sector: "General", mentorLoad: 0, credentialsVerified: true, sponsorConfirmed: false, venueBookingDates: [] },
+      { name: "BookedSpace KL", entityType: "Venue", sector: "General", mentorLoad: 0, credentialsVerified: true, sponsorConfirmed: true, venueBookingDates: ["2026-05-16", "2026-05-17"] }
+    ]
+  }
+};
 
 interface ConflictCardProps {
   conflict: DetectedConflict;
@@ -195,13 +209,15 @@ const InteractionTable: React.FC<InteractionTableProps> = ({ interactions }) => 
   );
 };
 
-export default function AdminDashboardPage() {
+export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view: any) => void }) {
   const [activeNav, setActiveNav] = useState("Overview");
   const [conflictsLoading, setConflictsLoading] = useState(false);
   const [detectedConflicts, setDetectedConflicts] = useState<DetectedConflict[]>([]);
   const [resolvedConflicts, setResolvedConflicts] = useState<DetectedConflict[]>([]);
   const [showResolved, setShowResolved] = useState(false);
   const [activeTab, setActiveTab] = useState<"Current" | "History">("Current");
+  const [adminData, setAdminData] = useState<any>(null);
+  const [programs, setPrograms] = useState<any[]>([]);
 
   const navItems = ["Overview"];
 
@@ -214,50 +230,30 @@ export default function AdminDashboardPage() {
       }
       const conflictsKB: Conflict[] = await response.json();
 
-      const programmeData: ProgrammeData = {
-        name: "MyHack 2026 Accelerator",
-        totalCompanies: 12,
-        activeConnections: 8,
-        pendingMatches: 3,
-        companies: [
-          {
-            name: "Rocketlab Sdn Bhd",
-            entityType: "Startup",
-            sector: "Deeptech",
-            mentorLoad: 4,
-            credentialsVerified: false,
-            sponsorConfirmed: true,
-            venueBookingDates: ["2026-05-16", "2026-05-17"]
-          },
-          {
-            name: "TechVentures",
-            entityType: "Mentor",
-            sector: "Fintech",
-            mentorLoad: 5,
-            credentialsVerified: true,
-            sponsorConfirmed: true,
-            venueBookingDates: []
-          },
-          {
-            name: "CorporateX",
-            entityType: "Sponsor",
-            sector: "General",
-            mentorLoad: 0,
-            credentialsVerified: true,
-            sponsorConfirmed: false,
-            venueBookingDates: []
-          },
-          {
-            name: "BookedSpace KL",
-            entityType: "Venue",
-            sector: "General",
-            mentorLoad: 0,
-            credentialsVerified: true,
-            sponsorConfirmed: true,
-            venueBookingDates: ["2026-05-16", "2026-05-17"]
-          }
-        ]
-      };
+      // Fetch admin data from Firebase
+      const adminDocRef = doc(db, "adminData", "dashboard");
+      const adminDocSnap = await getDoc(adminDocRef);
+      
+      let fetchedAdminData;
+      if (adminDocSnap.exists()) {
+        fetchedAdminData = adminDocSnap.data();
+      } else {
+        // Auto-seed Firebase if it's empty
+        await setDoc(adminDocRef, defaultAdminData);
+        fetchedAdminData = defaultAdminData;
+      }
+      setAdminData(fetchedAdminData);
+
+      // Fetch programs from Firebase
+      const querySnapshot = await getDocs(collection(db, "programmes"));
+      const fetchedPrograms = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setPrograms(fetchedPrograms);
+
+      // Supply Gemini with the REAL programmes list to analyze for conflicts
+      const programmeData = fetchedPrograms;
 
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       if (!apiKey) {
@@ -381,12 +377,12 @@ export default function AdminDashboardPage() {
           <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-slate-500">Programme Name</span>
+                <span className="text-sm font-medium text-slate-500">Total Programmes</span>
                 <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600">
                   <Activity size={20} />
                 </div>
               </div>
-              <div className="text-xl font-bold text-slate-800 line-clamp-1 mt-2">MyHack 2026 Accelerator</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{programs.length}</div>
             </div>
             
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -396,7 +392,7 @@ export default function AdminDashboardPage() {
                   <Users size={20} />
                 </div>
               </div>
-              <div className="text-3xl font-bold text-slate-800 mt-2">12</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{adminData?.programmeData?.totalCompanies || 0}</div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -406,7 +402,7 @@ export default function AdminDashboardPage() {
                   <Link2 size={20} />
                 </div>
               </div>
-              <div className="text-3xl font-bold text-slate-800 mt-2">8</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{adminData?.programmeData?.activeConnections || 0}</div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -416,7 +412,7 @@ export default function AdminDashboardPage() {
                   <Clock size={20} />
                 </div>
               </div>
-              <div className="text-3xl font-bold text-slate-800 mt-2">3</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{adminData?.programmeData?.pendingMatches || 0}</div>
             </div>
           </section>
 
@@ -525,7 +521,7 @@ export default function AdminDashboardPage() {
                 </div>
               </div>
               <div className="p-0">
-                <InteractionTable interactions={activeTab === "Current" ? dummyCurrentInteractions : dummyHistoryInteractions} />
+                <InteractionTable interactions={adminData ? (activeTab === "Current" ? adminData.currentInteractions : adminData.historyInteractions) : []} />
               </div>
             </section>
 
@@ -535,7 +531,7 @@ export default function AdminDashboardPage() {
                 <h2 className="text-xl font-semibold text-slate-800">Recent AI Match Activity</h2>
               </div>
               <div className="p-6 space-y-5 bg-slate-50/30 flex-1">
-                {dummyAiMatches.map((match) => (
+                {adminData?.aiMatches?.map((match: any) => (
                   <div key={match.id} className="flex gap-3 text-sm">
                     <div className="mt-1">
                       {match.outcome === "Matched" ? (
@@ -567,7 +563,15 @@ export default function AdminDashboardPage() {
         </div>
       </main>
 
-      {/* Help Button */}
+      {/* Help Button & Exit */}
+      {onNavigate && (
+        <button 
+          onClick={() => onNavigate('dashboard')}
+          className="fixed bottom-20 right-6 px-4 py-2.5 bg-white text-[#2d3142] rounded-lg shadow-lg hover:bg-slate-50 font-semibold text-sm transition-colors z-50 flex items-center gap-2 border border-slate-200"
+        >
+          Exit Admin View
+        </button>
+      )}
       <button className="fixed bottom-6 right-6 w-12 h-12 bg-[#1e2330] hover:bg-slate-800 text-white rounded-full shadow-lg flex items-center justify-center transition-colors z-50">
         <HelpCircle size={24} />
       </button>
