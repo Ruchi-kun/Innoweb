@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Briefcase, Loader2, Star, Target, Users, Mail } from 'lucide-react';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore'; // Added collection and getDocs
+import { ArrowLeft, Briefcase, Loader2, Star, Target, Users, Mail, XCircle } from 'lucide-react';
+import { doc, collection, getDocs, onSnapshot, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { recordProgrammeEvent, runProgrammeMatching, type ProgrammeMatch } from '../../lib/api';
+import { getLatestPassport } from '../../lib/passports';
 
 interface ProgrammeDetailsProps {
     programmeId: string;
@@ -18,6 +20,8 @@ interface Programme {
     endDate: string;
     entities: string[];
     status: string;
+    ownerCompanyId?: string;
+    ownerPassportId?: string;
 }
 
 // Added Participant interface to match your Firebase structure
@@ -27,41 +31,99 @@ interface Participant {
     role: string;
     expertise: string;
     company: string;
+    score?: number;
 }
 
 export default function ProgrammeDetails({ programmeId, onNavigate, onViewParticipant }: ProgrammeDetailsProps) {
     const [programme, setProgramme] = useState<Programme | null>(null);
-    const [participants, setParticipants] = useState<Participant[]>([]); // New state for real data
+    const [participants, setParticipants] = useState<Participant[]>([]);
     const [loading, setLoading] = useState(true);
+    const [matching, setMatching] = useState(false);
+    const [cancelling, setCancelling] = useState(false);
+
+    const buildParticipantsFromMatches = async (matches: ProgrammeMatch[]) => {
+        const companiesSnapshot = await getDocs(collection(db, "companies"));
+        const companiesById = new Map(companiesSnapshot.docs.map((companyDoc) => [companyDoc.id, companyDoc.data()]));
+        return matches.map((match) => {
+            const company = companiesById.get(match.companyId);
+            const vectors = company?.extractedVectors || {};
+            return {
+                id: match.companyId,
+                name: company?.companyName || 'Unknown Company',
+                role: vectors.companyType || 'Company',
+                expertise: vectors.primaryIndustry || 'Not specified',
+                company: company?.companyName || 'Unknown Company',
+                score: match.score,
+            };
+        });
+    };
+
+    const runMatching = async () => {
+        setMatching(true);
+        try {
+            const result = await runProgrammeMatching(programmeId);
+            setParticipants(await buildParticipantsFromMatches(result.matches));
+        } catch (error) {
+            console.error("Error running matching:", error);
+        } finally {
+            setMatching(false);
+        }
+    };
+
+    const cancelProgramme = async () => {
+        if (!programme || programme.status === "Cancelled") return;
+
+        setCancelling(true);
+        try {
+            const latestPassport = await getLatestPassport();
+            const companyId = programme.ownerCompanyId || latestPassport?.companyId;
+
+            if (!companyId) {
+                alert("No company passport was found for this programme cancellation.");
+                return;
+            }
+
+            await updateDoc(doc(db, "programmes", programmeId), {
+                status: "Cancelled",
+                cancelledAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+
+            await recordProgrammeEvent(programmeId, {
+                companyId,
+                eventType: "programme_cancelled",
+                payload: {
+                    name: programme.name,
+                    type: programme.type,
+                    previousStatus: programme.status,
+                },
+            });
+        } catch (error) {
+            console.error("Error cancelling programme:", error);
+            alert("Failed to cancel the programme. Check console for details.");
+        } finally {
+            setCancelling(false);
+        }
+    };
 
     useEffect(() => {
-        const fetchAllData = async () => {
-            try {
-                // 1. Fetch the specific Programme
-                const docRef = doc(db, "programmes", programmeId);
-                const docSnap = await getDoc(docRef);
-
+        const unsubscribe = onSnapshot(
+            doc(db, "programmes", programmeId),
+            (docSnap) => {
                 if (docSnap.exists()) {
                     setProgramme({ id: docSnap.id, ...docSnap.data() } as Programme);
+                } else {
+                    setProgramme(null);
                 }
-
-                // 2. Fetch all Participants from your 'participants' collection
-                const querySnapshot = await getDocs(collection(db, "participants"));
-                const participantsList = querySnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })) as Participant[];
-
-                setParticipants(participantsList);
-
-            } catch (error) {
-                console.error("Error fetching from Firebase:", error);
-            } finally {
                 setLoading(false);
-            }
-        };
+            },
+            (error) => {
+                console.error("Error fetching from Firebase:", error);
+                setLoading(false);
+            },
+        );
 
-        fetchAllData();
+        return () => unsubscribe();
     }, [programmeId]);
 
     if (loading) {
@@ -122,6 +184,10 @@ export default function ProgrammeDetails({ programmeId, onNavigate, onViewPartic
 
                         <div className="flex gap-4 pb-1">
                             <div className="bg-white/5 border border-white/10 rounded-xl p-3 px-5 text-center">
+                                <p className="text-[10px] uppercase text-slate-500 font-bold mb-1">Status</p>
+                                <p className="text-sm font-mono font-bold text-blue-400">{programme.status}</p>
+                            </div>
+                            <div className="bg-white/5 border border-white/10 rounded-xl p-3 px-5 text-center">
                                 <p className="text-[10px] uppercase text-slate-500 font-bold mb-1">Start Date</p>
                                 <p className="text-sm font-mono font-bold text-blue-400">{programme.startDate}</p>
                             </div>
@@ -142,9 +208,33 @@ export default function ProgrammeDetails({ programmeId, onNavigate, onViewPartic
                             <Users className="text-blue-600" size={24} />
                             Compatible Participants
                         </h2>
-                        <p className="text-slate-500 text-sm mt-1">Found {participants.length} matches from your database.</p>
+                        <p className="text-slate-500 text-sm mt-1">Found {participants.length} backend-ranked matches from your database.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={runMatching}
+                            disabled={matching || programme.status === "Cancelled"}
+                            className="bg-[#3b4256] hover:bg-[#2d3142] disabled:bg-slate-400 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                        >
+                            {matching && <Loader2 className="w-4 h-4 animate-spin" />}
+                            Run Matching
+                        </button>
+                        <button
+                            onClick={cancelProgramme}
+                            disabled={cancelling || programme.status === "Cancelled"}
+                            className="bg-white hover:bg-rose-50 disabled:bg-slate-100 border border-rose-200 disabled:border-slate-200 text-rose-700 disabled:text-slate-400 px-4 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2"
+                        >
+                            {cancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
+                            {programme.status === "Cancelled" ? "Cancelled" : "Cancel Programme"}
+                        </button>
                     </div>
                 </div>
+
+                {participants.length === 0 && (
+                    <div className="bg-white border border-slate-200 rounded-xl p-8 text-center mb-6">
+                        <p className="text-slate-600">Run matching to generate ranked proposals for this programme.</p>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {participants.map((person) => (
@@ -186,7 +276,9 @@ export default function ProgrammeDetails({ programmeId, onNavigate, onViewPartic
                             <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center w-full">
                                 <div className="flex items-center gap-1">
                                     <Star size={12} className="text-amber-400 fill-amber-400" />
-                                    <span className="text-[10px] font-bold text-slate-400 tracking-wide">TOP MATCH</span>
+                                    <span className="text-[10px] font-bold text-slate-400 tracking-wide">
+                                        {person.score ? `${person.score}% MATCH` : 'MATCH'}
+                                    </span>
                                 </div>
                                 {/* Prevent the mail button from triggering the card click */}
                                 <div

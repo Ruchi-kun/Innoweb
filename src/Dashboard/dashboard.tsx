@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
     Briefcase,
     TrendingUp,
@@ -8,6 +9,9 @@ import {
     Plus,
     Settings
 } from 'lucide-react';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+import { subscribeLatestPassport, type PassportData } from '../lib/passports';
 
 // --- Types ---
 interface Connection {
@@ -16,20 +20,60 @@ interface Connection {
     type: string;
     programme: string;
     date: string;
-    status: 'Completed' | 'Active' | 'Pending';
+    status: 'Completed' | 'Active' | 'Pending' | 'Cancelled';
 }
 
-const tableData: Connection[] = [
-    { id: '1', companyName: 'TechMentor Inc.', type: 'Mentorship', programme: 'Startup Accelerator Q1', date: '2024-03-15', status: 'Completed' },
-    { id: '2', companyName: 'Innovation Hub', type: 'Mentorship', programme: 'Startup Accelerator Q1', date: '2024-04-20', status: 'Active' },
-    { id: '3', companyName: 'Global Ventures', type: 'Sponsorship', programme: 'Seed Funding Round', date: '2024-05-05', status: 'Pending' },
-];
+interface Programme {
+    id: string;
+    name?: string;
+    type?: string;
+    startDate?: string;
+    status?: string;
+}
 
 interface DashboardProps {
-    onNavigate: (view: any) => void;
+    onNavigate: (view: 'admin' | 'create') => void;
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
+    const [passport, setPassport] = useState<PassportData | null>(null);
+    const [programmes, setProgrammes] = useState<Programme[]>([]);
+
+    useEffect(() => {
+        const unsubscribePassport = subscribeLatestPassport(setPassport);
+        const unsubscribeProgrammes = onSnapshot(collection(db, "programmes"), (snapshot) => {
+            setProgrammes(snapshot.docs.map((programmeDoc) => ({
+                id: programmeDoc.id,
+                ...programmeDoc.data(),
+            }) as Programme));
+        });
+
+        return () => {
+            unsubscribePassport();
+            unsubscribeProgrammes();
+        };
+    }, []);
+
+    const activeProgrammes = programmes.filter((programme) => programme.status !== "Cancelled");
+    const cancelledProgrammes = programmes.filter((programme) => programme.status === "Cancelled");
+    const programmeHistory = passport?.programmeHistory || [];
+    const tableData: Connection[] = programmeHistory.slice().reverse().slice(0, 5).map((event, index) => {
+        const programme = programmes.find((item) => item.id === event.programmeId);
+        const eventType = String(event.eventType || "programme_created");
+        const payload = (event.payload || {}) as { name?: string; type?: string };
+        return {
+            id: `${eventType}-${index}`,
+            companyName: passport?.companyName || "Current entity",
+            type: payload.type || programme?.type || "Programme",
+            programme: payload.name || programme?.name || String(event.programmeId || "Programme"),
+            date: String(event.createdAt || programme?.startDate || ""),
+            status: eventType === "programme_cancelled" ? "Cancelled" : eventType === "programme_completed" ? "Completed" : "Active",
+        };
+    });
+
+    const passportScore = passport?.scoreTotal ?? 0;
+    const scoreOffset = 201 - (201 * Math.min(passportScore, 100)) / 100;
+
     return (
         <main className="flex-1 flex flex-col h-full relative overflow-y-auto">
 
@@ -75,27 +119,27 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mb-4 text-slate-600">
                             <TrendingUp size={20} />
                         </div>
-                        <h3 className="text-4xl font-semibold text-slate-800 mb-1">12</h3>
+                        <h3 className="text-4xl font-semibold text-slate-800 mb-1">{activeProgrammes.length}</h3>
                         <p className="text-slate-500 text-sm font-medium mb-1">Active Connections</p>
-                        <p className="text-slate-400 text-xs">+3 this month</p>
+                        <p className="text-slate-400 text-xs">{cancelledProgrammes.length} cancelled</p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                         <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mb-4 text-slate-600">
                             <Briefcase size={20} />
                         </div>
-                        <h3 className="text-4xl font-semibold text-slate-800 mb-1">8</h3>
+                        <h3 className="text-4xl font-semibold text-slate-800 mb-1">{programmes.length}</h3>
                         <p className="text-slate-500 text-sm font-medium mb-1">Programmes Joined</p>
-                        <p className="text-slate-400 text-xs">2 in progress</p>
+                        <p className="text-slate-400 text-xs">{activeProgrammes.length} in progress</p>
                     </div>
 
                     <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex flex-col">
                         <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center mb-4 text-slate-600">
                             <Award size={20} />
                         </div>
-                        <h3 className="text-4xl font-semibold text-slate-800 mb-1">142</h3>
+                        <h3 className="text-4xl font-semibold text-slate-800 mb-1">{passport ? passport.scoreTotal : '-'}</h3>
                         <p className="text-slate-500 text-sm font-medium mb-1">Passport Score</p>
-                        <p className="text-slate-400 text-xs">Lower is better</p>
+                        <p className="text-slate-400 text-xs">{passport?.tier || 'No passport yet'}</p>
                     </div>
                 </div>
 
@@ -110,17 +154,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                                 strokeWidth="6"
                                 fill="none"
                                 strokeDasharray="201"
-                                strokeDashoffset="60"
+                                strokeDashoffset={scoreOffset}
                                 className="transition-all duration-1000 ease-in-out"
                             />
                         </svg>
                         <div className="absolute inset-0 flex items-center justify-center">
-                            <span className="text-2xl font-bold text-slate-800">142</span>
+                            <span className="text-2xl font-bold text-slate-800">{passport ? passport.scoreTotal : '-'}</span>
                         </div>
                     </div>
                     <div>
                         <h3 className="text-lg font-semibold text-slate-800 mb-1">Passport Score</h3>
-                        <p className="text-slate-500 text-sm">Lower scores indicate better performance</p>
+                        <p className="text-slate-500 text-sm">Updates when programmes are created, completed, or cancelled.</p>
                     </div>
                 </div>
 
@@ -152,12 +196,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         ${row.status === 'Completed' ? 'bg-green-100 text-green-700' : ''}
                         ${row.status === 'Active' ? 'bg-blue-100 text-blue-700' : ''}
                         ${row.status === 'Pending' ? 'bg-amber-100 text-amber-700' : ''}
+                        ${row.status === 'Cancelled' ? 'bg-rose-100 text-rose-700' : ''}
                       `}>
                         {row.status}
                       </span>
                                     </td>
                                 </tr>
                             ))}
+                            {tableData.length === 0 && (
+                                <tr>
+                                    <td className="px-6 py-8 text-center text-slate-500" colSpan={5}>
+                                        No programme events have been recorded for the latest passport.
+                                    </td>
+                                </tr>
+                            )}
                             </tbody>
                         </table>
                     </div>

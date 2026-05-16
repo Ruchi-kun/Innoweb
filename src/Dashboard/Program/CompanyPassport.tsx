@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
     ArrowLeft,
     ShieldCheck,
@@ -8,83 +8,73 @@ import {
     ChevronDown,
     ChevronUp,
     Info,
-    CheckCircle2
+    CheckCircle2,
+    Loader2
 } from 'lucide-react';
+import { subscribeLatestPassport, type PassportData as FirestorePassportData, type ScoreBreakdown as FirestoreScoreBreakdown } from '../../lib/passports';
 
-interface ScoreBreakdown {
+interface ScoreBreakdown extends FirestoreScoreBreakdown {
     category: string;
     score: number;
     maxScore: number;
     reasoning: string[];
-    icon: React.ElementType;
-    color: string;
+    icon?: React.ElementType;
+    color?: string;
 }
 
-interface PassportData {
+interface PassportData extends FirestorePassportData {
     companyName: string;
-    totalScore: number;
-    level: string;
-    breakdown: ScoreBreakdown[]; // This is where ScoreBreakdown is used!
+    scoreTotal: number;
+    tier: string;
+    breakdown: ScoreBreakdown[];
 }
 
-const mockPassportData: PassportData = {
-    companyName: "TechNova AI",
-    totalScore: 84,
-    level: "Gold Tier",
-    breakdown: [
-        {
-            category: "Team & Expertise",
-            score: 25,
-            maxScore: 30,
-            icon: Users,
-            color: "text-blue-500",
-            reasoning: [
-                "Founder has 2 previous successful exits in the AI space.",
-                "CTO holds a PhD in Neural Networks from Stanford.",
-                "Engineering team is 80% senior-level."
-            ]
-        },
-        {
-            category: "Product Readiness",
-            score: 22,
-            maxScore: 25,
-            icon: Zap,
-            color: "text-amber-500",
-            reasoning: [
-                "MVP is live with over 500 active weekly users.",
-                "Proprietary algorithm shows 15% better efficiency than competitors.",
-                "Full API documentation completed."
-            ]
-        },
-        {
-            category: "Market Traction",
-            score: 18,
-            maxScore: 25,
-            icon: TrendingUp,
-            color: "text-emerald-500",
-            reasoning: [
-                "Month-over-month revenue growth of 12%.",
-                "Strategic partnerships signed with 3 Fortune 500 companies.",
-                "Low churn rate of 2.1%."
-            ]
-        },
-        {
-            category: "Legal & Compliance",
-            score: 19,
-            maxScore: 20,
-            icon: ShieldCheck,
-            color: "text-purple-500",
-            reasoning: [
-                "GDPR and SOC2 Type II compliant.",
-                "All IP assignments fully signed and verified.",
-                "Clean cap table with no litigious history."
-            ]
-        }
-    ]
+const categoryMeta = (category: string) => {
+    if (category.includes('Team')) return { icon: Users, color: 'text-blue-500' };
+    if (category.includes('Product')) return { icon: Zap, color: 'text-amber-500' };
+    if (category.includes('Market')) return { icon: TrendingUp, color: 'text-emerald-500' };
+    if (category.includes('Compliance')) return { icon: ShieldCheck, color: 'text-purple-500' };
+    return { icon: CheckCircle2, color: 'text-sky-500' };
 };
 
 export default function CompanyPassport({ onBack }: { onBack: () => void }) {
     const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
+    const [passportData, setPassportData] = useState<PassportData | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const unsubscribe = subscribeLatestPassport((passport) => {
+            setPassportData(passport as PassportData | null);
+            setLoading(false);
+        });
+
+        return () => unsubscribe();
+    }, []);
+
+    if (loading) {
+        return (
+            <div className="flex-1 bg-[#f8fafb] flex items-center justify-center">
+                <Loader2 className="w-10 h-10 text-slate-400 animate-spin" />
+            </div>
+        );
+    }
+
+    if (!passportData) {
+        return (
+            <div className="flex-1 bg-[#f8fafb] overflow-y-auto p-8">
+                <button
+                    onClick={onBack}
+                    className="flex items-center gap-2 text-slate-500 hover:text-slate-900 transition-colors mb-8 font-medium"
+                >
+                    <ArrowLeft size={18} /> Back to Participants
+                </button>
+                <div className="max-w-4xl mx-auto bg-white border border-slate-200 rounded-2xl p-8 text-center">
+                    <h1 className="text-2xl font-bold text-slate-900 mb-2">No passport found</h1>
+                    <p className="text-slate-500">Upload company credentials to create the first Firestore-backed passport.</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="flex-1 bg-[#f8fafb] overflow-y-auto p-8">
@@ -107,7 +97,7 @@ export default function CompanyPassport({ onBack }: { onBack: () => void }) {
               <span className="px-4 py-1.5 bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-full text-xs font-bold tracking-widest uppercase">
                 Startup Passport v1.0
               </span>
-                            <h1 className="text-5xl font-black">{mockPassportData.companyName}</h1>
+                            <h1 className="text-5xl font-black">{passportData.companyName}</h1>
                             <p className="text-slate-400 text-lg max-w-md">Verified digital identity and health scorecard for institutional matching.</p>
 
                             <div className="flex items-center gap-2 text-emerald-400 font-bold">
@@ -122,14 +112,15 @@ export default function CompanyPassport({ onBack }: { onBack: () => void }) {
                                 <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-white/5" />
                                 <circle cx="96" cy="96" r="88" stroke="currentColor" strokeWidth="12" fill="transparent"
                                         strokeDasharray={553}
-                                        strokeDashoffset={553 - (553 * mockPassportData.totalScore) / 100}
+                                        strokeDashoffset={553 - (553 * passportData.scoreTotal) / 100}
                                         className="text-blue-500 transition-all duration-1000 ease-out"
                                         strokeLinecap="round"
                                 />
                             </svg>
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
-                                <span className="text-5xl font-black leading-none">{mockPassportData.totalScore}</span>
+                                <span className="text-5xl font-black leading-none">{passportData.scoreTotal}</span>
                                 <span className="text-slate-400 text-sm font-bold uppercase tracking-widest mt-1">Score</span>
+                                <span className="text-blue-300 text-xs font-bold mt-2">{passportData.tier}</span>
                             </div>
                         </div>
                     </div>
@@ -138,7 +129,11 @@ export default function CompanyPassport({ onBack }: { onBack: () => void }) {
                 {/* Breakdown List */}
                 <div className="space-y-4">
                     <h2 className="text-xl font-bold text-slate-900 px-2">Points Breakdown</h2>
-                    {mockPassportData.breakdown.map((item) => (
+                    {passportData.breakdown.map((item) => {
+                        const meta = categoryMeta(item.category);
+                        const Icon = item.icon || meta.icon;
+                        const color = item.color || meta.color;
+                        return (
                         <div
                             key={item.category}
                             className={`bg-white border rounded-2xl transition-all duration-200 overflow-hidden ${
@@ -150,15 +145,15 @@ export default function CompanyPassport({ onBack }: { onBack: () => void }) {
                                 className="w-full p-6 flex items-center justify-between hover:bg-slate-50 transition-colors"
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className={`p-3 rounded-xl bg-slate-50 ${item.color}`}>
-                                        <item.icon size={24} />
+                                    <div className={`p-3 rounded-xl bg-slate-50 ${color}`}>
+                                        <Icon size={24} />
                                     </div>
                                     <div className="text-left">
                                         <h3 className="font-bold text-slate-900">{item.category}</h3>
                                         <div className="flex items-center gap-2 mt-1">
                                             <div className="w-32 h-1.5 bg-slate-100 rounded-full overflow-hidden">
                                                 <div
-                                                    className={`h-full bg-current ${item.color}`}
+                                                    className={`h-full bg-current ${color}`}
                                                     style={{ width: `${(item.score / item.maxScore) * 100}%` }}
                                                 />
                                             </div>
@@ -188,7 +183,8 @@ export default function CompanyPassport({ onBack }: { onBack: () => void }) {
                                 </div>
                             )}
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             </div>
         </div>

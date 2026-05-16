@@ -1,14 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
-import { getStructuredGeminiModel } from './lib/gemini';
-import type { StartupEcosystemNode } from './schema';
+import { clarifyIntake, type IntakeAnalyzeResponse } from './lib/api';
 
 // 1. IMPORT THE BACKGROUND CSS
 import './CredentialsBackground.css';
 
 interface VerificationAssistantProps {
+  sessionId: string;
   initialMissingReasoning: string;
-  fileOrLinkContext: string;
-  onComplete: (data: StartupEcosystemNode) => void;
+  onComplete: (result: IntakeAnalyzeResponse) => void;
   fileName?: string;
   fileSize?: string;
 }
@@ -19,12 +18,12 @@ interface ChatMessage {
 }
 
 export default function VerificationAssistant({
-                                                initialMissingReasoning,
-                                                fileOrLinkContext,
-                                                onComplete,
-                                                fileName,
-                                                fileSize
-                                              }: VerificationAssistantProps) {
+  sessionId,
+  initialMissingReasoning,
+  onComplete,
+  fileName,
+  fileSize
+}: VerificationAssistantProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       role: 'assistant',
@@ -52,35 +51,16 @@ export default function VerificationAssistant({
     setIsTyping(true);
 
     try {
-      const model = getStructuredGeminiModel();
-      const historyText = messages.map(m => `${m.role.toUpperCase()}: ${m.text}`).join('\n') + `\nUSER: ${userText}`;
+      if (!sessionId) {
+        throw new Error('Missing intake session id.');
+      }
 
-      const prompt = `
-        You are an AI Verification Assistant for an innovation ecosystem.
-        We are extracting company data markers for any company type: Company Name, Company Type, Primary Industry, Operating Stage, Key Capabilities, Operational Needs, Target Markets, and Business Model.
+      const result = await clarifyIntake({ sessionId, message: userText });
 
-        Original Document/Link Content:
-        """
-        ${fileOrLinkContext}
-        """
-
-        Chat History so far clarifying missing information:
-        """
-        ${historyText}
-        """
-
-        Evaluate all the provided information. If you have enough information to confidently fill out all required company data markers, set isDataSufficient to true.
-        If not, set isDataSufficient to false and explain exactly what is still missing in a conversational tone in 'missingFieldsReasoning'.
-      `;
-
-      const result = await model.generateContent(prompt);
-      const textResponse = result.response.text();
-      const parsedData = JSON.parse(textResponse) as StartupEcosystemNode;
-
-      if (parsedData.isDataSufficient) {
-        onComplete(parsedData);
+      if (result.status === 'verified') {
+        onComplete(result);
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', text: parsedData.missingFieldsReasoning }]);
+        setMessages(prev => [...prev, { role: 'assistant', text: result.missingFieldsReasoning || 'Please provide more detail.' }]);
       }
     } catch (err) {
       console.error(err);
