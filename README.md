@@ -29,33 +29,11 @@ Innovation ecosystem platforms have no native coordination layer between _"a par
 
 **Programs hardcode their coordination.** Platforms bake admin workflows directly into operations:
 
-```python
-# Admin manually pulls both profiles, eyeballs for conflicts,
-# emails both parties, updates the master sheet, books a calendar slot.
-# This runs for every single match. Across every cohort. In every country.
-def assign_mentor(admin_id, mentor_id, startup_id):
-    mentor  = sheets.lookup("Mentors", mentor_id)
-    startup = sheets.lookup("Startups", startup_id)
-    if admin_notes[mentor_id].get("flagged"):
-        slack(admin_id, f"⚠️ Review {mentor_id} before assigning")
-        return                                          # entire flow blocked
-    send_email(mentor["email"], startup["email"])
-    sheets.append("Assignments", [mentor_id, startup_id, "PENDING"])
-    calendar.create_event(mentor["email"], startup["email"])
-```
-
 Every policy change requires an operational intervention. Every programme needs the same admin overhead rebuilt from nothing.
 
 ## The Solution
 
 Innoweb lifts coordination _out_ of admin workflows and into programmable, automated platform entities.
-
-```python
-# In your programme flow:
-intake.validate(profile)          # self-correcting AI intake
-matching.run(pool, constraints)   # conflict-aware compatibility engine
-comms.trigger(match)              # auto-mail → auto-schedule → auto-meet
-```
 
 The matching engine resolves constraints natively. The intake pipeline self-corrects. Every accepted match triggers a full communication loop with zero human steps. Relationship entities persist across cohorts and improve future matching.
 
