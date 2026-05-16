@@ -11,9 +11,9 @@ export default function Auth() {
     setError(null);
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      setError(err.message || 'Failed to sign in with Google');
+      setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
     } finally {
       setIsLoading(false);
     }

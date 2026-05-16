@@ -1,0 +1,300 @@
+import React, { useState } from 'react';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from './firebase';
+import { getStructuredGeminiModel } from './lib/gemini';
+import type { StartupEcosystemNode } from './schema';
+import VerificationAssistant from './VerificationAssistant';
+import * as pdfjsLib from 'pdfjs-dist';
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.mjs?url';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+export default function CredentialsUpload() {
+  const [status, setStatus] = useState<'idle' | 'analyzing' | 'success' | 'chat'>('idle');
+  const [linkInput, setLinkInput] = useState('');
+  const [fileContext, setFileContext] = useState('');
+  const [fileName, setFileName] = useState('');
+  const [fileSize, setFileSize] = useState('');
+  const [loadingText, setLoadingText] = useState('Initializing AI...');
+  
+  const [missingReasoning, setMissingReasoning] = useState('');
+
+  React.useEffect(() => {
+    if (status !== 'analyzing') return;
+
+    const texts = [
+      'Analyzing...',
+      'Thinking...',
+      'Pondering...',
+      'Extracting details...',
+      'Almost there...'
+    ];
+    let i = 0;
+    const interval = setInterval(() => {
+      i = (i + 1) % texts.length;
+      setLoadingText(texts[i]);
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [status]);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFileName(file.name);
+      setFileSize((file.size / (1024 * 1024)).toFixed(2) + ' MB');
+      
+      setStatus('analyzing');
+      setLoadingText('Reading PDF document...');
+      
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let extractedText = '';
+        
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items
+            .map((item) => {
+              if (typeof item === 'object' && item !== null && 'str' in item) {
+                return String(item.str);
+              }
+
+              return '';
+            })
+            .join(' ');
+          extractedText += pageText + '\n';
+        }
+        
+        setFileContext(`[Extracted from ${file.name}]:\n${extractedText}`);
+        setStatus('idle');
+      } catch (err) {
+        console.error("PDF extraction error:", err);
+        alert("Could not read the PDF file. Please ensure it is a valid text-searchable PDF.");
+        setStatus('idle');
+      }
+    }
+  };
+
+  const handleSubmit = async () => {
+    const finalContext = linkInput ? `Google Drive Link Provided: ${linkInput}` : fileContext;
+    if (!finalContext) {
+      alert("Please upload a file or provide a link.");
+      return;
+    }
+
+    setLoadingText('Analyzing...');
+    setStatus('analyzing');
+
+    try {
+      const model = getStructuredGeminiModel();
+      const prompt = `
+        You are an AI analyzing startup credentials. 
+        Extract the required data markers based on this input: "${finalContext}".
+        If the input is just a Google Drive link, you might not have enough information. 
+        If there is not enough information to fill ALL required vectors (Company Name, Primary Vertical, Operational Stage, Operational Bottlenecks, Target Markets, and Business Model), set isDataSufficient to false and explain what is missing in missingFieldsReasoning.
+      `;
+
+      const result = await model.generateContent(prompt);
+      const textResponse = result.response.text();
+      const parsedData = JSON.parse(textResponse) as StartupEcosystemNode;
+
+      if (parsedData.isDataSufficient) {
+        await saveToFirestore(parsedData);
+        setStatus('success');
+      } else {
+        setMissingReasoning(parsedData.missingFieldsReasoning);
+        setStatus('chat');
+      }
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred during analysis.");
+      setStatus('idle');
+    }
+  };
+
+  const saveToFirestore = async (data: StartupEcosystemNode) => {
+    try {
+      await addDoc(collection(db, 'startups'), {
+        ...data,
+        createdAt: new Date()
+      });
+    } catch (e) {
+      console.error("Error adding document: ", e);
+    }
+  };
+
+  if (status === 'chat') {
+    return (
+      <VerificationAssistant 
+        initialMissingReasoning={missingReasoning}
+        fileOrLinkContext={linkInput ? `Google Drive Link: ${linkInput}` : fileContext}
+        fileName={fileName || linkInput}
+        fileSize={fileSize}
+        onComplete={async (data) => {
+          setStatus('analyzing'); // show loading briefly
+          await saveToFirestore(data);
+          setStatus('success');
+        }}
+      />
+    );
+  }
+
+  if (status === 'success') {
+    return (
+      <div className="w-full max-w-2xl mx-auto mt-20 flex flex-col items-center font-sans bg-white p-12 rounded-3xl shadow-sm border border-emerald-100 text-center">
+        <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mb-6">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="w-10 h-10">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h2 className="text-3xl font-bold text-slate-800 mb-4">Verification Complete</h2>
+        <p className="text-slate-500 mb-8 max-w-md">
+          Your credentials have been successfully analyzed and all 10 data markers have been securely saved to our database.
+        </p>
+        <button 
+          onClick={() => { setStatus('idle'); setLinkInput(''); setFileName(''); setFileContext(''); }}
+          className="bg-[#3B4569] text-white px-8 py-3 rounded-xl font-semibold shadow-sm hover:bg-[#2D3552] transition-colors"
+        >
+          Upload Another
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full max-w-2xl mx-auto mt-12 flex flex-col items-center font-sans relative">
+      {/* Header text */}
+      <h1 className="text-[#102341] text-[2.5rem] font-bold mb-3 tracking-tight">
+        Welcome to Innoweb
+      </h1>
+      <p className="text-[#64748B] text-lg mb-12">
+        Join the regional innovation ecosystem
+      </p>
+
+      {/* Main Card */}
+      <div className="w-full bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-8 sm:p-10 mb-8 relative overflow-hidden">
+        
+        {status === 'analyzing' && (
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-md z-20 flex flex-col items-center justify-center transition-all duration-300">
+            <div className="relative w-16 h-16 mb-6">
+              <div className="absolute inset-0 rounded-full border-[3px] border-slate-200"></div>
+              <div className="absolute inset-0 rounded-full border-[3px] border-[#3B4569] border-t-transparent animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="w-2 h-2 bg-[#3B4569] rounded-full animate-ping"></div>
+              </div>
+            </div>
+            <p className="text-[#3B4569] font-semibold text-lg animate-pulse tracking-wide">{loadingText}</p>
+          </div>
+        )}
+
+        {/* Required Fields Info */}
+        <div className="mb-8 bg-blue-50/50 border border-blue-100/50 rounded-xl p-5">
+          <h3 className="text-blue-800 font-semibold text-sm mb-2 flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+            Required Information
+          </h3>
+          <p className="text-blue-700/80 text-xs mb-3">To successfully pass AI verification, your profile must explicitly state:</p>
+          <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-blue-800 text-xs font-medium pl-1">
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Company Name</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Primary Vertical</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Operational Stage</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Target Markets</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Business Model</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Key Bottlenecks</li>
+          </ul>
+        </div>
+
+        {/* Upload Section */}
+        <div className="mb-8 relative">
+          <h2 className="text-[#1E293B] font-medium text-[1.05rem] mb-4">
+            Upload company credentials
+          </h2>
+          
+          <label className="border-2 border-dashed border-[#CBD5E1] rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-colors py-12 px-6 flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden">
+            <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf" />
+            
+            {fileName ? (
+              <div className="w-14 h-14 bg-emerald-50 rounded-full flex items-center justify-center mb-4 shadow-sm border border-emerald-100 group-hover:shadow-md transition-shadow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-7 h-7">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              </div>
+            ) : (
+              <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-4 shadow-sm border border-slate-100 group-hover:shadow-md transition-shadow">
+                <svg viewBox="0 0 24 24" fill="none" stroke="#334155" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-6 h-6">
+                  <path d="M21 15v4a2 2 0 0 1-2-2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+            )}
+            
+            {fileName ? (
+              <>
+                 <p className="text-[#0F172A] font-medium mb-1.5">{fileName}</p>
+                 <p className="text-emerald-500 text-sm font-medium flex items-center gap-1">
+                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                   Selected successfully
+                 </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[#0F172A] font-medium mb-1.5">
+                  Drop your PDF here or click to browse
+                </p>
+                <p className="text-[#94A3B8] text-sm">
+                  Supports PDF files up to 10MB
+                </p>
+              </>
+            )}
+          </label>
+        </div>
+
+        {/* Link Section */}
+        <div className="mb-8">
+          <h2 className="text-[#1E293B] font-medium text-[1.05rem] mb-4">
+            Or paste Google Drive link
+          </h2>
+          
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-5 h-5">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+              </svg>
+            </div>
+            <input 
+              type="text" 
+              value={linkInput}
+              onChange={(e) => setLinkInput(e.target.value)}
+              placeholder="https://drive.google.com/..." 
+              className="w-full pl-11 pr-4 py-3.5 border border-[#E2E8F0] rounded-xl text-[#334155] placeholder:text-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#3B4569]/20 focus:border-[#3B4569] transition-all bg-white"
+            />
+          </div>
+          {linkInput && (
+            <p className="text-amber-500 text-xs mt-2 flex items-center gap-1">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              Please ensure the Google Drive link is set to "Anyone with the link can view".
+            </p>
+          )}
+        </div>
+
+        {/* Submit Button */}
+        <button 
+          onClick={handleSubmit}
+          disabled={status === 'analyzing'}
+          className="w-full bg-[#3B4569] hover:bg-[#2D3552] text-white font-semibold py-4 rounded-xl transition-colors shadow-sm active:scale-[0.99] disabled:opacity-70 disabled:cursor-not-allowed"
+        >
+          Submit for Review
+        </button>
+      </div>
+
+      {/* Footer text */}
+      <p className="text-[#64748B] text-sm">
+        Your credentials will be verified by our AI system within 24 hours
+      </p>
+    </div>
+  );
+}

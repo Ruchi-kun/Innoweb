@@ -1,34 +1,52 @@
-import { useState, useEffect } from 'react'
-import { onAuthStateChanged, type User, signOut } from 'firebase/auth'
-import { auth } from './firebase'
+import { useEffect, useState } from 'react'
+import { onAuthStateChanged, signOut, type User } from 'firebase/auth'
+import {
+  Briefcase,
+  FileCheck2,
+  LayoutDashboard,
+  LogOut,
+  Plus,
+  Settings,
+} from 'lucide-react'
 import Auth from './Auth'
-import { LayoutDashboard, Briefcase, Users, CreditCard, Settings } from 'lucide-react'
-
-// Import all 3 of your screens!
+import CredentialsUpload from './CredentialsUpload'
 import Dashboard from './Dashboard/dashboard'
-import MyProgrammes from './Dashboard/Program/MyProgrammes.tsx'
-import CreateProgramme from './Dashboard/Program/CreateProgramme.tsx'
+import CreateProgramme from './Dashboard/Program/CreateProgramme'
+import MyProgrammes from './Dashboard/Program/MyProgrammes'
+import { auth } from './firebase'
+
+type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials'
+
+const navItems: Array<{
+  view: AppView
+  label: string
+  icon: typeof LayoutDashboard
+}> = [
+  { view: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { view: 'programmes', label: 'Programmes', icon: Briefcase },
+  { view: 'create', label: 'Create', icon: Plus },
+  { view: 'credentials', label: 'Credentials', icon: FileCheck2 },
+]
 
 function App() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-
-  // Now we have 3 views!
-  const [currentView, setCurrentView] = useState<'dashboard' | 'programmes' | 'create'>('dashboard')
+  const [currentView, setCurrentView] = useState<AppView>('dashboard')
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
       setLoading(false)
     })
-    return () => unsubscribe()
+
+    return unsubscribe
   }, [])
 
   if (loading) {
     return (
-        <div className="min-h-screen w-screen flex items-center justify-center bg-[radial-gradient(circle_at_center,#1e1b4b_0%,#020617_100%)]">
-          <div className="border-[3px] border-white/10 border-t-white rounded-full w-10 h-10 animate-spin"></div>
-        </div>
+      <div className="min-h-screen w-screen flex items-center justify-center bg-slate-950">
+        <div className="border-[3px] border-white/10 border-t-white rounded-full w-10 h-10 animate-spin" />
+      </div>
     )
   }
 
@@ -36,71 +54,92 @@ function App() {
     return <Auth />
   }
 
+  const renderCurrentView = () => {
+    switch (currentView) {
+      case 'programmes':
+        return <MyProgrammes onNavigate={setCurrentView} />
+      case 'create':
+        return <CreateProgramme onNavigate={setCurrentView} />
+      case 'credentials':
+        return <CredentialsUpload />
+      case 'dashboard':
+      default:
+        return <Dashboard onNavigate={setCurrentView} />
+    }
+  }
+
   return (
-      <div className="flex h-screen w-screen bg-[#f8fafb] font-sans text-slate-800 overflow-hidden">
-
-        {/* Floating sign-out button */}
-        <button
-            onClick={() => signOut(auth)}
-            className="absolute top-6 right-36 z-50 flex items-center gap-2 bg-rose-100 hover:bg-rose-200 text-rose-700 border border-rose-200 transition-all duration-300 px-4 py-2 rounded-full text-sm font-semibold shadow-sm"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-          Sign Out
-        </button>
-
-        {/* SHARED SIDEBAR */}
-        <aside className="w-64 bg-white border-r border-slate-200 flex flex-col pt-6 shrink-0 z-40">
-          <div className="px-6 mb-8">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Innoweb</h1>
+    <div className="min-h-screen w-screen bg-[#f8fafb] text-slate-900 font-sans flex overflow-hidden">
+      <aside className="w-72 shrink-0 bg-[#171b2a] text-white flex flex-col border-r border-white/10">
+        <div className="h-20 flex items-center gap-3 px-6 border-b border-white/10">
+          <div className="w-10 h-10 rounded-xl bg-white text-[#171b2a] flex items-center justify-center shadow-sm">
+            <LayoutDashboard size={22} />
           </div>
-
-          <nav className="flex-1 flex flex-col gap-1">
-            <button
-                onClick={() => setCurrentView('dashboard')}
-                className={`flex items-center gap-3 px-6 py-3 font-medium transition-colors border-l-4 w-full text-left
-              ${currentView === 'dashboard'
-                    ? 'bg-slate-50 border-slate-800 text-slate-900'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-transparent'}`}
-            >
-              <LayoutDashboard size={20} className={currentView === 'dashboard' ? 'text-slate-600' : ''} />
-              Dashboard
-            </button>
-
-            <button
-                onClick={() => setCurrentView('programmes')}
-                className={`flex items-center gap-3 px-6 py-3 font-medium transition-colors border-l-4 w-full text-left
-              ${(currentView === 'programmes' || currentView === 'create')
-                    ? 'bg-slate-50 border-slate-800 text-slate-900'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-transparent'}`}
-            >
-              <Briefcase size={20} className={(currentView === 'programmes' || currentView === 'create') ? 'text-slate-600' : ''} />
-              My Programmes
-            </button>
-
-            <div className="flex items-center gap-3 px-6 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer border-l-4 border-transparent">
-              <Users size={20} /> Connections
-            </div>
-            <div className="flex items-center gap-3 px-6 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer border-l-4 border-transparent">
-              <CreditCard size={20} /> Passport
-            </div>
-            <div className="flex items-center gap-3 px-6 py-3 text-slate-500 hover:bg-slate-50 hover:text-slate-900 transition-colors cursor-pointer border-l-4 border-transparent">
-              <Settings size={20} /> Settings
-            </div>
-          </nav>
-        </aside>
-
-        {/* DYNAMIC MAIN CONTENT - Router Logic */}
-        <div className="flex-1 h-full relative">
-          {currentView === 'dashboard' && <Dashboard onNavigate={setCurrentView} />}
-          {currentView === 'programmes' && <MyProgrammes onNavigate={setCurrentView} />}
-          {currentView === 'create' && <CreateProgramme onNavigate={setCurrentView} />}
+          <div>
+            <div className="text-lg font-bold leading-tight">Innoweb</div>
+            <div className="text-xs text-slate-400">Innovation ecosystem</div>
+          </div>
         </div>
 
-      </div>
+        <nav className="flex-1 p-4 space-y-1">
+          {navItems.map(({ view, label, icon: Icon }) => {
+            const isActive = currentView === view
+
+            return (
+              <button
+                key={view}
+                onClick={() => setCurrentView(view)}
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-semibold transition-colors ${
+                  isActive
+                    ? 'bg-white text-[#171b2a] shadow-sm'
+                    : 'text-slate-300 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Icon size={18} />
+                {label}
+              </button>
+            )
+          })}
+        </nav>
+
+        <div className="p-4 border-t border-white/10">
+          <div className="flex items-center gap-3 px-2 py-3">
+            {user.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt="Profile"
+                className="w-10 h-10 rounded-full border border-white/20"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center border border-white/20 text-sm font-bold">
+                {(user.displayName || user.email || '?')[0].toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">
+                {user.displayName || 'Signed in'}
+              </div>
+              <div className="text-xs text-slate-400 truncate">{user.email}</div>
+            </div>
+          </div>
+
+          <button
+            onClick={() => signOut(auth)}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/10 hover:bg-white/15 text-sm font-semibold text-slate-100 transition-colors"
+          >
+            <LogOut size={16} />
+            Sign out
+          </button>
+
+          <button className="w-full mt-2 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
+            <Settings size={16} />
+            Settings
+          </button>
+        </div>
+      </aside>
+
+      <section className="flex-1 min-w-0 overflow-y-auto">{renderCurrentView()}</section>
+    </div>
   )
 }
 
