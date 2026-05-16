@@ -26,7 +26,7 @@ const tableData: Connection[] = [
 ];
 
 interface DashboardProps {
-    onNavigate: (view: 'dashboard' | 'create' | 'admin') => void;
+    onNavigate: (view: any) => void;
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
