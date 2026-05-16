@@ -5,7 +5,8 @@ import {
     ChevronLeft,
     ChevronRight,
     HelpCircle,
-    Plus
+    Plus,
+    Settings
 } from 'lucide-react';
 
 // --- Types ---
@@ -25,7 +26,7 @@ const tableData: Connection[] = [
 ];
 
 interface DashboardProps {
-    onNavigate: (view: 'dashboard' | 'create') => void;
+    onNavigate: (view: 'dashboard' | 'create' | 'admin') => void;
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
@@ -50,13 +51,22 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     <h2 className="text-3xl font-bold text-[#0f172a]">Welcome back, Acme Ventures</h2>
 
                     {/* NEW BUTTON TO TRIGGER NAVIGATION */}
-                    <button
-                        onClick={() => onNavigate('create')}
-                        className="bg-[#3b4256] hover:bg-[#2d3142] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
-                    >
-                        <Plus size={18} />
-                        Create Programme
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => onNavigate('admin')}
+                            className="bg-white hover:bg-slate-50 border border-slate-200 text-[#2d3142] px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
+                        >
+                            <Settings size={18} />
+                            Admin View
+                        </button>
+                        <button
+                            onClick={() => onNavigate('create')}
+                            className="bg-[#3b4256] hover:bg-[#2d3142] text-white px-5 py-2.5 rounded-lg text-sm font-semibold transition-colors shadow-sm flex items-center gap-2"
+                        >
+                            <Plus size={18} />
+                            Create Programme
+                        </button>
+                    </div>
                 </div>
 
                 {/* Top 3 Metric Cards */}

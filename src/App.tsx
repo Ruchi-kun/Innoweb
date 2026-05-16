@@ -13,9 +13,10 @@ import CredentialsUpload from './CredentialsUpload'
 import Dashboard from './Dashboard/dashboard'
 import CreateProgramme from './Dashboard/Program/CreateProgramme'
 import MyProgrammes from './Dashboard/Program/MyProgrammes'
+import AdminDashboardPage from './pages/AdminDashboardPage'
 import { auth } from './firebase'
 
-type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials'
+type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'admin'
 
 const navItems: Array<{
   view: AppView
@@ -62,6 +63,8 @@ function App() {
         return <CreateProgramme onNavigate={setCurrentView} />
       case 'credentials':
         return <CredentialsUpload />
+      case 'admin':
+        return <AdminDashboardPage onNavigate={setCurrentView} />
       case 'dashboard':
       default:
         return <Dashboard onNavigate={setCurrentView} />
