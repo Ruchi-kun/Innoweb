@@ -19,7 +19,8 @@
 ---
 
 </div>
-## The Problem
+
+# The Problem
 
 Innovation ecosystem platforms have no native coordination layer between _"a participant is onboarded"_ and _"a relationship is actively managed."_ This surfaces in three ways:
 
