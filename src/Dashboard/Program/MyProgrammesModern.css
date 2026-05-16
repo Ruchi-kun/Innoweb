@@ -1,0 +1,193 @@
+/* src/MyProgrammesModern.css */
+
+.modern-programmes-container {
+    padding: 4rem 2rem;
+    background: transparent;
+    min-height: 100vh;
+    /* Ensure the main content area handles the custom cursor */
+    cursor: none !important;
+}
+
+/* Custom Cursor Styling */
+.custom-cursor {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 80px;
+    height: 80px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    mix-blend-mode: difference;
+    transition: transform 0.15s ease-out, scale 0.2s ease;
+}
+
+.cursor-text {
+    font-size: 0.75rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    color: black;
+}
+
+/* Page Header */
+.programmes-header-minimal {
+    max-width: 1200px;
+    margin: 0 auto 8rem auto;
+    text-align: center;
+}
+
+.programmes-header-minimal h1 {
+    font-size: 4rem;
+    font-weight: 900;
+    font-style: italic;
+    color: white;
+    letter-spacing: -0.02em;
+}
+
+/* THE ZIGZAG GRID
+   We use a fixed 3-column layout to ensure the
+   math for Column 1, 2, and 3 is always consistent.
+*/
+.modern-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4rem 3rem;
+    max-width: 1400px;
+    margin: 0 auto;
+    /* align-items: start is CRITICAL.
+       It prevents Row 1 from stretching to the height of the
+       staggered middle card, which causes overlaps with Row 2. */
+    align-items: start;
+    padding-bottom: 30rem; /* Space for the bottom staggered items */
+}
+
+/* Column-Specific Offsets (ZigZag Pattern) */
+@media(min-width: 1024px) {
+    /* COLUMN 1: Items 1, 4, 7... */
+    .programme-card:nth-child(3n+1) {
+        margin-top: 0;
+    }
+
+    /* COLUMN 2: Items 2, 5, 8... (The Middle Column) */
+    .programme-card:nth-child(3n+2) {
+        margin-top: 12rem; /* Pushed significantly down */
+    }
+
+    /* COLUMN 3: Items 3, 6, 9... */
+    .programme-card:nth-child(3n) {
+        margin-top: 0; /* Pushed moderately down */
+    }
+}
+
+/* Mobile & Tablet: Collapse to 1 column and reset offsets */
+@media (max-width: 1023px) {
+    .modern-grid {
+        grid-template-columns: 1fr;
+        gap: 4rem;
+        padding-bottom: 10rem;
+    }
+    .programme-card:nth-child(n) {
+        margin-top: 0 !important;
+    }
+}
+
+/* Card Visuals */
+.programme-card {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4/5;
+    overflow: hidden;
+    background: #000;
+    box-shadow: 0 40px 80px rgba(0,0,0,0.5);
+    cursor: none;
+    transition: transform 0.4s ease;
+}
+
+.card-bg-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.6;
+    transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+}
+
+.programme-card:hover .card-bg-image {
+    transform: scale(1.1);
+    opacity: 0.4;
+}
+
+/* Content Overlay */
+.card-content {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+            to bottom,
+            transparent 0%,
+            rgba(0,0,0,0) 40%,
+            rgba(0,0,0,0.95) 100%
+    );
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 2.5rem;
+    color: white;
+    pointer-events: none;
+}
+
+.prog-type {
+    display: block;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.4em;
+    margin-bottom: 0.8rem;
+    color: #94a3b8;
+}
+
+.prog-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.8rem;
+    font-weight: 900;
+    line-height: 0.85;
+    margin-bottom: 1.5rem;
+}
+
+.prog-name span {
+    position: relative;
+    display: inline-block;
+}
+
+.prog-name span::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 0;
+    width: 100%;
+    height: 2px;
+    background: white;
+    transform: scaleX(0);
+    transform-origin: right;
+    transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.programme-card:hover .prog-name span::after {
+    transform: scaleX(1);
+    transform-origin: left;
+}
+
+.prog-meta {
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: #64748b;
+    display: flex;
+    gap: 0.5rem;
+    align-items: center;
+}
+
+.dot {
+    color: #475569;
+}
