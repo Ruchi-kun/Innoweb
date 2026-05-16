@@ -46,3 +46,27 @@ def test_programme_completion_updates_engagement_score() -> None:
     assert updated["scoreTotal"] > before
     assert updated["programmeHistory"][0]["eventType"] == "programme_completed"
     assert updated["auditTrail"][-1]["programmeId"] == "programme-1"
+
+
+def test_programme_created_updates_engagement_score() -> None:
+    passport = build_passport("company-1", sample_node()).model_dump()
+    before = passport["scoreTotal"]
+
+    updated = apply_programme_event(passport, "programme-1", "programme_created", {"name": "Accelerator"})
+
+    assert updated["scoreTotal"] > before
+    assert updated["programmeHistory"][0]["eventType"] == "programme_created"
+    assert updated["auditTrail"][-1]["eventType"] == "programme_created"
+
+
+def test_programme_cancelled_reduces_engagement_score_without_negative_breakdown() -> None:
+    passport = build_passport("company-1", sample_node()).model_dump()
+    created = apply_programme_event(passport, "programme-1", "programme_created", {"name": "Accelerator"})
+
+    cancelled = apply_programme_event(created, "programme-1", "programme_cancelled", {"name": "Accelerator"})
+    engagement = next(item for item in cancelled["breakdown"] if item["category"] == "Engagement & Programme History")
+
+    assert cancelled["scoreTotal"] < created["scoreTotal"]
+    assert engagement["score"] >= 0
+    assert cancelled["programmeHistory"][-1]["eventType"] == "programme_cancelled"
+    assert cancelled["auditTrail"][-1]["eventType"] == "programme_cancelled"

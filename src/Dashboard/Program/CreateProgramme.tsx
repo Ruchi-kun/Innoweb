@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { CreditCard, HelpCircle, ArrowLeft, Loader2 } from 'lucide-react';
 import { collection, addDoc } from 'firebase/firestore';
 import { db } from '../../firebase'; // Make sure this path is correct for your structure!
+import { recordProgrammeEvent } from '../../lib/api';
+import { getLatestPassport } from '../../lib/passports';
 
 interface CreateProgrammeProps {
     onNavigate: (view: 'dashboard' | 'programmes' | 'create') => void;
@@ -39,15 +41,38 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
         setIsSubmitting(true);
 
         try {
+            const latestPassport = await getLatestPassport();
+
+            if (!latestPassport?.companyId) {
+                alert("Create a company passport before creating a programme so the passport score can be updated.");
+                return;
+            }
+
             // Push the new document to the "programmes" collection
-            await addDoc(collection(db, "programmes"), {
+            const programmeRef = await addDoc(collection(db, "programmes"), {
                 name: name,
                 description: description,
                 type: type,
                 startDate: startDate,
                 endDate: endDate,
                 entities: selectedEntities,
-                status: "Active" // Defaulting new programmes to Active
+                status: "Active", // Defaulting new programmes to Active
+                ownerCompanyId: latestPassport.companyId,
+                ownerPassportId: latestPassport.id,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+            });
+
+            await recordProgrammeEvent(programmeRef.id, {
+                companyId: latestPassport.companyId,
+                eventType: "programme_created",
+                payload: {
+                    name,
+                    type,
+                    startDate,
+                    endDate,
+                    entities: selectedEntities,
+                },
             });
 
             // Once successful, send the user back to the Programmes grid to see it!

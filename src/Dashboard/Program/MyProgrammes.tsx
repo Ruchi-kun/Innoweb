@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Calendar, Users, MoreHorizontal, ArrowRight, Zap, Loader2 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 
 interface MyProgrammesProps {
@@ -53,21 +53,23 @@ export default function MyProgrammes({ onNavigate, onViewDetails }: MyProgrammes
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchProgrammes = async () => {
-            try {
-                const querySnapshot = await getDocs(collection(db, "programmes"));
+        const unsubscribe = onSnapshot(
+            collection(db, "programmes"),
+            (querySnapshot) => {
                 const programmesData: Programme[] = querySnapshot.docs.map(doc => ({
                     id: doc.id,
                     ...doc.data() as Omit<Programme, 'id'>
                 }));
                 setProgrammes(programmesData);
-            } catch (error) {
-                console.error("Error fetching programmes: ", error);
-            } finally {
                 setLoading(false);
-            }
-        };
-        fetchProgrammes();
+            },
+            (error) => {
+                console.error("Error fetching programmes: ", error);
+                setLoading(false);
+            },
+        );
+
+        return () => unsubscribe();
     }, []);
 
     return (

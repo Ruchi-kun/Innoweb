@@ -11,10 +11,9 @@ import {
     CheckCircle2,
     Loader2
 } from 'lucide-react';
-import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { subscribeLatestPassport, type PassportData as FirestorePassportData, type ScoreBreakdown as FirestoreScoreBreakdown } from '../../lib/passports';
 
-interface ScoreBreakdown {
+interface ScoreBreakdown extends FirestoreScoreBreakdown {
     category: string;
     score: number;
     maxScore: number;
@@ -23,7 +22,7 @@ interface ScoreBreakdown {
     color?: string;
 }
 
-interface PassportData {
+interface PassportData extends FirestorePassportData {
     companyName: string;
     scoreTotal: number;
     tier: string;
@@ -44,21 +43,12 @@ export default function CompanyPassport({ onBack }: { onBack: () => void }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const fetchLatestPassport = async () => {
-            try {
-                const snapshot = await getDocs(query(collection(db, 'passports'), orderBy('updatedAt', 'desc'), limit(1)));
-                const latest = snapshot.docs[0];
-                if (latest) {
-                    setPassportData(latest.data() as PassportData);
-                }
-            } catch (error) {
-                console.error('Error fetching passport:', error);
-            } finally {
-                setLoading(false);
-            }
-        };
+        const unsubscribe = subscribeLatestPassport((passport) => {
+            setPassportData(passport as PassportData | null);
+            setLoading(false);
+        });
 
-        fetchLatestPassport();
+        return () => unsubscribe();
     }, []);
 
     if (loading) {

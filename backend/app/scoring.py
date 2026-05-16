@@ -112,7 +112,7 @@ def apply_programme_event(passport: dict[str, Any], programme_id: str, event_typ
 
     event = {"programmeId": programme_id, "eventType": event_type, "payload": payload, "createdAt": now}
 
-    if event_type in {"joined", "milestone_completed", "programme_completed"}:
+    if event_type in {"programme_created", "programme_cancelled", "joined", "milestone_completed", "programme_completed"}:
         updated["programmeHistory"] = [*updated["programmeHistory"], event]
     elif event_type in {"match_accepted", "match_rejected"}:
         updated["matchHistory"] = [*updated["matchHistory"], event]
@@ -122,6 +122,8 @@ def apply_programme_event(passport: dict[str, Any], programme_id: str, event_typ
     updated["auditTrail"] = [*updated["auditTrail"], event]
 
     engagement_bonus = {
+        "programme_created": 2,
+        "programme_cancelled": -2,
         "joined": 2,
         "milestone_completed": 4,
         "programme_completed": 6,

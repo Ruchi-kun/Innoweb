@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Activity, Users, Link2, Clock, HelpCircle, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc, collection, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "../firebase";
 import { runConflictDetection } from "../lib/api";
+import type { PassportData } from "../lib/passports";
 
 export interface Conflict {
   id: string;
@@ -244,6 +245,7 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
   const [activeTab, setActiveTab] = useState<"Current" | "History">("Current");
   const [adminData, setAdminData] = useState<AdminData | null>(null);
   const [programs, setPrograms] = useState<ProgrammeSummary[]>([]);
+  const [passports, setPassports] = useState<PassportData[]>([]);
 
   const navItems = ["Overview"];
 
@@ -297,6 +299,27 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const unsubscribeProgrammes = onSnapshot(collection(db, "programmes"), (snapshot) => {
+      setPrograms(snapshot.docs.map(programmeDoc => ({
+        id: programmeDoc.id,
+        ...programmeDoc.data(),
+      })) as ProgrammeSummary[]);
+    });
+
+    const unsubscribePassports = onSnapshot(collection(db, "passports"), (snapshot) => {
+      setPassports(snapshot.docs.map(passportDoc => ({
+        id: passportDoc.id,
+        ...passportDoc.data(),
+      })) as PassportData[]);
+    });
+
+    return () => {
+      unsubscribeProgrammes();
+      unsubscribePassports();
+    };
+  }, []);
+
   const handleResolveManually = (id: string) => {
     setDetectedConflicts(prev => 
       prev.map(c => c.id === id ? { ...c, status: "in_progress" } : c)
@@ -310,6 +333,12 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
       setResolvedConflicts(prev => [{ ...conflictToDismiss, status: "resolved" }, ...prev]);
     }
   };
+
+  const activeProgrammes = programs.filter(programme => programme.status !== "Cancelled");
+  const latestPassport = passports
+    .slice()
+    .sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")))[0];
+  const totalCompanies = passports.length || adminData?.programmeData?.totalCompanies || 0;
 
   return (
     <div className="flex h-screen bg-[#f8fafb] text-slate-800 font-sans overflow-hidden">
@@ -369,7 +398,7 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
                   <Users size={20} />
                 </div>
               </div>
-              <div className="text-3xl font-bold text-slate-800 mt-2">{adminData?.programmeData?.totalCompanies || 0}</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{totalCompanies}</div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
@@ -379,17 +408,17 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
                   <Link2 size={20} />
                 </div>
               </div>
-              <div className="text-3xl font-bold text-slate-800 mt-2">{adminData?.programmeData?.activeConnections || 0}</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{activeProgrammes.length}</div>
             </div>
 
             <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex flex-col justify-between">
               <div className="flex items-center justify-between mb-4">
-                <span className="text-sm font-medium text-slate-500">Pending Matches</span>
+                <span className="text-sm font-medium text-slate-500">Latest Passport Score</span>
                 <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-600">
                   <Clock size={20} />
                 </div>
               </div>
-              <div className="text-3xl font-bold text-slate-800 mt-2">{adminData?.programmeData?.pendingMatches || 0}</div>
+              <div className="text-3xl font-bold text-slate-800 mt-2">{latestPassport?.scoreTotal ?? "-"}</div>
             </div>
           </section>
 

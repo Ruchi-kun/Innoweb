@@ -56,6 +56,8 @@ class IntakeResponse(BaseModel):
 class ProgrammeEventRequest(BaseModel):
     companyId: str
     eventType: Literal[
+        "programme_created",
+        "programme_cancelled",
         "joined",
         "milestone_completed",
         "programme_completed",

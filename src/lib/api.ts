@@ -16,6 +16,16 @@ export interface ProgrammeMatch {
   score: number;
 }
 
+export type ProgrammeEventType =
+  | "programme_created"
+  | "programme_cancelled"
+  | "joined"
+  | "milestone_completed"
+  | "programme_completed"
+  | "match_accepted"
+  | "match_rejected"
+  | "engagement_low";
+
 const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...init,
@@ -52,6 +62,19 @@ export const clarifyIntake = (params: { sessionId: string; message: string }) =>
 export const runProgrammeMatching = (programmeId: string) =>
   requestJson<{ programmeId: string; matches: ProgrammeMatch[] }>(`/api/programmes/${programmeId}/match`, {
     method: "POST",
+  });
+
+export const recordProgrammeEvent = (
+  programmeId: string,
+  params: { companyId: string; eventType: ProgrammeEventType; payload?: Record<string, unknown> },
+) =>
+  requestJson<{ passportId: string; passport: Record<string, unknown> }>(`/api/programmes/${programmeId}/events`, {
+    method: "POST",
+    body: JSON.stringify({
+      companyId: params.companyId,
+      eventType: params.eventType,
+      payload: params.payload || {},
+    }),
   });
 
 export const runConflictDetection = () =>
