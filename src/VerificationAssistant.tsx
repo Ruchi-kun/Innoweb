@@ -56,7 +56,7 @@ export default function VerificationAssistant({
       
       const prompt = `
 You are an AI Verification Assistant for an innovation ecosystem.
-We are extracting 6 key data markers from a startup: Company Name, Primary Vertical, Operational Stage, Operational Bottlenecks, Target Markets, and Business Model.
+We are extracting company data markers for any company type: Company Name, Company Type, Primary Industry, Operating Stage, Key Capabilities, Operational Needs, Target Markets, and Business Model.
 
 Original Document/Link Content:
 """
@@ -68,7 +68,7 @@ Chat History so far clarifying missing information:
 ${historyText}
 """
 
-Evaluate all the provided information. If you have enough information to confidently fill out all 6 required data markers, set isDataSufficient to true. 
+Evaluate all the provided information. If you have enough information to confidently fill out all required company data markers, set isDataSufficient to true.
 If not, set isDataSufficient to false and explain exactly what is still missing in a conversational tone in 'missingFieldsReasoning'.
       `;
 

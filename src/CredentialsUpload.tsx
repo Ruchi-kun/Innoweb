@@ -11,6 +11,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsWorker;
 
 export default function CredentialsUpload() {
   const [status, setStatus] = useState<'idle' | 'analyzing' | 'success' | 'chat'>('idle');
+  const [isDragging, setIsDragging] = useState(false);
   const [linkInput, setLinkInput] = useState('');
   const [fileContext, setFileContext] = useState('');
   const [fileName, setFileName] = useState('');
@@ -38,42 +39,74 @@ export default function CredentialsUpload() {
     return () => clearInterval(interval);
   }, [status]);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setFileName(file.name);
-      setFileSize((file.size / (1024 * 1024)).toFixed(2) + ' MB');
-      
-      setStatus('analyzing');
-      setLoadingText('Reading PDF document...');
-      
-      try {
-        const arrayBuffer = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        let extractedText = '';
-        
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items
-            .map((item) => {
-              if (typeof item === 'object' && item !== null && 'str' in item) {
-                return String(item.str);
-              }
+  const readPdfFile = async (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Please upload a PDF file.');
+      return;
+    }
 
-              return '';
-            })
-            .join(' ');
-          extractedText += pageText + '\n';
-        }
-        
-        setFileContext(`[Extracted from ${file.name}]:\n${extractedText}`);
-        setStatus('idle');
-      } catch (err) {
-        console.error("PDF extraction error:", err);
-        alert("Could not read the PDF file. Please ensure it is a valid text-searchable PDF.");
-        setStatus('idle');
+    setFileName(file.name);
+    setFileSize((file.size / (1024 * 1024)).toFixed(2) + ' MB');
+    setStatus('analyzing');
+    setLoadingText('Reading PDF document...');
+
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      let extractedText = '';
+
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item) => {
+            if (typeof item === 'object' && item !== null && 'str' in item) {
+              return String(item.str);
+            }
+
+            return '';
+          })
+          .join(' ');
+        extractedText += pageText + '\n';
       }
+
+      setFileContext(`[Extracted from ${file.name}]:\n${extractedText}`);
+      setStatus('idle');
+    } catch (err) {
+      console.error("PDF extraction error:", err);
+      alert("Could not read the PDF file. Please ensure it is a valid text-searchable PDF.");
+      setStatus('idle');
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (file) {
+      await readPdfFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    setIsDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+
+    if (file) {
+      await readPdfFile(file);
     }
   };
 
@@ -90,10 +123,11 @@ export default function CredentialsUpload() {
     try {
       const model = getStructuredGeminiModel();
       const prompt = `
-        You are an AI analyzing startup credentials. 
-        Extract the required data markers based on this input: "${finalContext}".
+        You are an AI analyzing company credentials for an innovation ecosystem.
+        This must work for any company type, including startups, SMEs, corporations, mentors, sponsors, vendors, nonprofits, and ecosystem partners.
+        Extract the required company data markers based on this input: "${finalContext}".
         If the input is just a Google Drive link, you might not have enough information. 
-        If there is not enough information to fill ALL required vectors (Company Name, Primary Vertical, Operational Stage, Operational Bottlenecks, Target Markets, and Business Model), set isDataSufficient to false and explain what is missing in missingFieldsReasoning.
+        If there is not enough information to fill ALL required vectors (Company Name, Company Type, Primary Industry, Operating Stage, Key Capabilities, Operational Needs, Target Markets, and Business Model), set isDataSufficient to false and explain what is missing in missingFieldsReasoning.
       `;
 
       const result = await model.generateContent(prompt);
@@ -116,7 +150,7 @@ export default function CredentialsUpload() {
 
   const saveToFirestore = async (data: StartupEcosystemNode) => {
     try {
-      await addDoc(collection(db, 'startups'), {
+      await addDoc(collection(db, 'companies'), {
         ...data,
         createdAt: new Date()
       });
@@ -151,7 +185,7 @@ export default function CredentialsUpload() {
         </div>
         <h2 className="text-3xl font-bold text-slate-800 mb-4">Verification Complete</h2>
         <p className="text-slate-500 mb-8 max-w-md">
-          Your credentials have been successfully analyzed and all 10 data markers have been securely saved to our database.
+          Your credentials have been successfully analyzed and the company profile has been securely saved to our database.
         </p>
         <button 
           onClick={() => { setStatus('idle'); setLinkInput(''); setFileName(''); setFileContext(''); }}
@@ -195,14 +229,14 @@ export default function CredentialsUpload() {
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
             Required Information
           </h3>
-          <p className="text-blue-700/80 text-xs mb-3">To successfully pass AI verification, your profile must explicitly state:</p>
+          <p className="text-blue-700/80 text-xs mb-3">To successfully pass AI verification, the company profile must explicitly state:</p>
           <ul className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-blue-800 text-xs font-medium pl-1">
             <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Company Name</li>
-            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Primary Vertical</li>
-            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Operational Stage</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Company Type</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Primary Industry</li>
             <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Target Markets</li>
             <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Business Model</li>
-            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Key Bottlenecks</li>
+            <li className="flex items-center gap-1.5"><div className="w-1 h-1 rounded-full bg-blue-400"></div> Capabilities & Needs</li>
           </ul>
         </div>
 
@@ -212,7 +246,16 @@ export default function CredentialsUpload() {
             Upload company credentials
           </h2>
           
-          <label className="border-2 border-dashed border-[#CBD5E1] rounded-xl bg-slate-50/50 hover:bg-slate-50 transition-colors py-12 px-6 flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden">
+          <label
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`border-2 border-dashed rounded-xl transition-colors py-12 px-6 flex flex-col items-center justify-center cursor-pointer group relative overflow-hidden ${
+              isDragging
+                ? 'border-[#3B4569] bg-blue-50 shadow-[0_0_0_4px_rgba(59,69,105,0.08)]'
+                : 'border-[#CBD5E1] bg-slate-50/50 hover:bg-slate-50'
+            }`}
+          >
             <input type="file" className="hidden" onChange={handleFileChange} accept=".pdf" />
             
             {fileName ? (
@@ -236,13 +279,13 @@ export default function CredentialsUpload() {
                  <p className="text-[#0F172A] font-medium mb-1.5">{fileName}</p>
                  <p className="text-emerald-500 text-sm font-medium flex items-center gap-1">
                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4"><polyline points="20 6 9 17 4 12"></polyline></svg>
-                   Selected successfully
+                  Selected successfully
                  </p>
               </>
             ) : (
               <>
                 <p className="text-[#0F172A] font-medium mb-1.5">
-                  Drop your PDF here or click to browse
+                  {isDragging ? 'Drop the PDF to upload' : 'Drop your PDF here or click to browse'}
                 </p>
                 <p className="text-[#94A3B8] text-sm">
                   Supports PDF files up to 10MB
