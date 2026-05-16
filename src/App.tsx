@@ -17,9 +17,11 @@ import ProgrammeDetails from './Dashboard/Program/ProgrammeDetails'
 import { auth } from './firebase'
 import AdminDashboardPage from './pages/AdminDashboardPage'
 import CompanyPassport from "./Dashboard/Program/CompanyPassport.tsx";
+import ParticipantProfile from "./Dashboard/Program/ParticipantProfile.tsx";
+import WelcomeScreen from "./WelcomeScreen.tsx";
 
 // Exporting this type so other files can use it if needed
-export type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'details' | 'admin' | 'passport';
+export type AppView = 'dashboard' | 'programmes' | 'create' | 'credentials' | 'details' | 'admin' | 'passport' | 'profile';
 
 const navItems: Array<{
   view: AppView
@@ -38,6 +40,8 @@ function App() {
   const [loading, setLoading] = useState(true)
   const [currentView, setCurrentView] = useState<AppView>('dashboard')
   const [selectedProgrammeId, setSelectedProgrammeId] = useState<string | null>(null)
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [hasEntered, setHasEntered] = useState(false);
 
   // 4. Kept only ONE handleNavigate function and typed it strictly to fix the "any" error
   const handleNavigate = (view: AppView | string) => {
@@ -51,6 +55,14 @@ function App() {
     })
     return () => unsubscribe()
   }, [])
+
+  if (!hasEntered) {
+    return <WelcomeScreen onEnter={() => setHasEntered(true)} />;
+  }
+
+  if (!user) {
+    return <Auth />;
+  }
 
   const renderView = () => {
     switch (currentView) {
@@ -79,10 +91,21 @@ function App() {
             <ProgrammeDetails
                 programmeId={selectedProgrammeId}
                 onNavigate={handleNavigate}
+                onViewParticipant={(participantId) => {
+                  setSelectedParticipantId(participantId);
+                  setCurrentView('profile');
+                }}
             />
         ) : <Dashboard onNavigate={handleNavigate} />
-      default:
-        return <Dashboard onNavigate={handleNavigate} />
+
+      case 'profile':
+        return selectedParticipantId ? (
+            <ParticipantProfile
+                participantId={selectedParticipantId}
+                onBack={() => setCurrentView('details')}
+                onViewPassport={() => setCurrentView('passport')}
+            />
+        ) : <Dashboard onNavigate={handleNavigate} />
     }
   }
 
@@ -155,7 +178,7 @@ function App() {
           </div>
         </aside>
 
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto bg-[#DCDCDC] scroll-smooth">
           {renderView()}
         </div>
       </div>
