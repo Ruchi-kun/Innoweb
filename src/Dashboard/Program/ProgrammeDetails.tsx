@@ -6,6 +6,7 @@ import { db } from '../../firebase';
 interface ProgrammeDetailsProps {
     programmeId: string;
     onNavigate: (view: 'dashboard' | 'programmes' | 'create' | 'details') => void;
+    onViewParticipant: (participantId: string) => void;
 }
 
 interface Programme {
@@ -28,7 +29,7 @@ interface Participant {
     company: string;
 }
 
-export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeDetailsProps) {
+export default function ProgrammeDetails({ programmeId, onNavigate, onViewParticipant }: ProgrammeDetailsProps) {
     const [programme, setProgramme] = useState<Programme | null>(null);
     const [participants, setParticipants] = useState<Participant[]>([]); // New state for real data
     const [loading, setLoading] = useState(true);
@@ -147,7 +148,11 @@ export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeD
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {participants.map((person) => (
-                        <div key={person.id} className="participant-glass p-6 flex flex-col justify-between group">
+                        <button
+                            key={person.id}
+                            onClick={() => onViewParticipant(person.id)}
+                            className="text-left w-full participant-glass p-6 flex flex-col justify-between group cursor-pointer"
+                        >
                             <div>
                                 <div className="flex justify-between items-start mb-4">
                                     <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-lg border-2 border-white shadow-sm">
@@ -178,16 +183,20 @@ export default function ProgrammeDetails({ programmeId, onNavigate }: ProgrammeD
                                 </div>
                             </div>
 
-                            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center">
+                            <div className="mt-6 pt-4 border-t border-slate-100 flex justify-between items-center w-full">
                                 <div className="flex items-center gap-1">
                                     <Star size={12} className="text-amber-400 fill-amber-400" />
                                     <span className="text-[10px] font-bold text-slate-400 tracking-wide">TOP MATCH</span>
                                 </div>
-                                <button className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-full transition-colors">
+                                {/* Prevent the mail button from triggering the card click */}
+                                <div
+                                    className="p-2 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded-full transition-colors"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
                                     <Mail size={16} />
-                                </button>
+                                </div>
                             </div>
-                        </div>
+                        </button>
                     ))}
                 </div>
             </div>
