@@ -1,8 +1,6 @@
 import { useState } from 'react';
 import { CreditCard, HelpCircle, ArrowLeft, Loader2 } from 'lucide-react';
-import { collection, addDoc } from 'firebase/firestore';
-import { db } from '../../firebase'; // Make sure this path is correct for your structure!
-import { recordProgrammeEvent } from '../../lib/api';
+import { createAdminDocument, recordProgrammeEvent } from '../../lib/api';
 import { getLatestPassport } from '../../lib/passports';
 
 interface CreateProgrammeProps {
@@ -48,8 +46,7 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
                 return;
             }
 
-            // Push the new document to the "programmes" collection
-            const programmeRef = await addDoc(collection(db, "programmes"), {
+            const programmeRef = await createAdminDocument("programmes", {
                 name: name,
                 description: description,
                 type: type,

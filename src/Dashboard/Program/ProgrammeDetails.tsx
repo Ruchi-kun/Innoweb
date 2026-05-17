@@ -1,8 +1,13 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Briefcase, Loader2, Star, Target, Users, Mail, XCircle } from 'lucide-react';
-import { doc, collection, getDocs, onSnapshot, updateDoc } from 'firebase/firestore';
-import { db } from '../../firebase';
-import { recordProgrammeEvent, runProgrammeMatching, type ProgrammeMatch } from '../../lib/api';
+import {
+    getAdminDocument,
+    listAdminDocuments,
+    recordProgrammeEvent,
+    runProgrammeMatching,
+    updateAdminDocument,
+    type ProgrammeMatch,
+} from '../../lib/api';
 import { getLatestPassport } from '../../lib/passports';
 
 interface ProgrammeDetailsProps {
@@ -42,16 +47,16 @@ export default function ProgrammeDetails({ programmeId, onNavigate, onViewPartic
     const [cancelling, setCancelling] = useState(false);
 
     const buildParticipantsFromMatches = async (matches: ProgrammeMatch[]) => {
-        const companiesSnapshot = await getDocs(collection(db, "companies"));
-        const companiesById = new Map(companiesSnapshot.docs.map((companyDoc) => [companyDoc.id, companyDoc.data()]));
+        const companies = await listAdminDocuments<{ id: string; companyName?: string; extractedVectors?: Record<string, unknown> }>("companies");
+        const companiesById = new Map(companies.map((company) => [company.id, company]));
         return matches.map((match) => {
             const company = companiesById.get(match.companyId);
             const vectors = company?.extractedVectors || {};
             return {
                 id: match.companyId,
                 name: company?.companyName || 'Unknown Company',
-                role: vectors.companyType || 'Company',
-                expertise: vectors.primaryIndustry || 'Not specified',
+                role: String(vectors.companyType || 'Company'),
+                expertise: String(vectors.primaryIndustry || 'Not specified'),
                 company: company?.companyName || 'Unknown Company',
                 score: match.score,
             };
@@ -83,7 +88,7 @@ export default function ProgrammeDetails({ programmeId, onNavigate, onViewPartic
                 return;
             }
 
-            await updateDoc(doc(db, "programmes", programmeId), {
+            await updateAdminDocument("programmes", programmeId, {
                 status: "Cancelled",
                 cancelledAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -107,23 +112,31 @@ export default function ProgrammeDetails({ programmeId, onNavigate, onViewPartic
     };
 
     useEffect(() => {
-        const unsubscribe = onSnapshot(
-            doc(db, "programmes", programmeId),
-            (docSnap) => {
-                if (docSnap.exists()) {
-                    setProgramme({ id: docSnap.id, ...docSnap.data() } as Programme);
-                } else {
-                    setProgramme(null);
-                }
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Error fetching from Firebase:", error);
-                setLoading(false);
-            },
-        );
+        let active = true;
 
-        return () => unsubscribe();
+        const loadProgramme = async () => {
+            try {
+                const document = await getAdminDocument<Programme>("programmes", programmeId);
+                if (active) {
+                    setProgramme(document);
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error("Error loading programme through Admin API:", error);
+                if (active) {
+                    setProgramme(null);
+                    setLoading(false);
+                }
+            }
+        };
+
+        void loadProgramme();
+        const intervalId = window.setInterval(loadProgramme, 5000);
+
+        return () => {
+            active = false;
+            window.clearInterval(intervalId);
+        };
     }, [programmeId]);
 
     if (loading) {

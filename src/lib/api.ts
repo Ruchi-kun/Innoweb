@@ -43,6 +43,32 @@ const requestJson = async <T>(path: string, init?: RequestInit): Promise<T> => {
   return response.json() as Promise<T>;
 };
 
+export const listAdminDocuments = async <T>(collectionName: string): Promise<T[]> => {
+  const response = await requestJson<{ documents: T[] }>(`/api/admin/collections/${collectionName}`);
+  return response.documents;
+};
+
+export const getAdminDocument = <T>(collectionName: string, documentId: string) =>
+  requestJson<T>(`/api/admin/collections/${collectionName}/${documentId}`);
+
+export const createAdminDocument = (collectionName: string, data: Record<string, unknown>) =>
+  requestJson<{ id: string }>(`/api/admin/collections/${collectionName}`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+
+export const setAdminDocument = (collectionName: string, documentId: string, data: Record<string, unknown>) =>
+  requestJson<{ id: string }>(`/api/admin/collections/${collectionName}/${documentId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const updateAdminDocument = (collectionName: string, documentId: string, data: Record<string, unknown>) =>
+  requestJson<{ id: string }>(`/api/admin/collections/${collectionName}/${documentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+
 export const analyzeIntake = (params: {
   sourceType: "pdf_text" | "drive_link";
   content: string;

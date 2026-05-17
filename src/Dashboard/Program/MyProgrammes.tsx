@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../../firebase';
+import { listAdminDocuments } from '../../lib/api';
 import './MyProgrammesModern.css';
 
 interface MyProgrammesProps {
@@ -26,25 +25,30 @@ export default function MyProgrammes({ onViewDetails }: MyProgrammesProps) {
     const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
     const [isHovering, setIsHovering] = useState(false);
 
-    // REAL-TIME LISTENER (This replaces both previous effects)
     useEffect(() => {
-        const programmesCol = collection(db, 'programmes');
+        let active = true;
 
-        // onSnapshot sets up a permanent link. When the DB changes, this function triggers automatically.
-        const unsubscribe = onSnapshot(programmesCol, (querySnapshot) => {
-            const data = querySnapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            })) as Programme[];
+        const loadProgrammes = async () => {
+            try {
+                const data = await listAdminDocuments<Programme>('programmes');
 
-            setProgrammes(data);
-            setLoading(false);
-        }, (error) => {
-            console.error("Error listening to programmes:", error);
-            setLoading(false);
-        });
+                if (active) {
+                    setProgrammes(data);
+                    setLoading(false);
+                }
+            } catch (error) {
+                console.error("Error loading programmes through Admin API:", error);
+                if (active) setLoading(false);
+            }
+        };
 
-        return () => unsubscribe(); // Cleanup on unmount
+        void loadProgrammes();
+        const intervalId = window.setInterval(loadProgrammes, 5000);
+
+        return () => {
+            active = false;
+            window.clearInterval(intervalId);
+        };
     }, []);
 
     // MOUSE TRACKING

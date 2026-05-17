@@ -9,8 +9,7 @@ import {
     Plus,
     Settings
 } from 'lucide-react';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import { listAdminDocuments } from '../lib/api';
 import { subscribeLatestPassport, type PassportData } from '../lib/passports';
 
 // --- Types ---
@@ -41,16 +40,24 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
     useEffect(() => {
         const unsubscribePassport = subscribeLatestPassport(setPassport);
-        const unsubscribeProgrammes = onSnapshot(collection(db, "programmes"), (snapshot) => {
-            setProgrammes(snapshot.docs.map((programmeDoc) => ({
-                id: programmeDoc.id,
-                ...programmeDoc.data(),
-            }) as Programme));
-        });
+        let active = true;
+
+        const loadProgrammes = async () => {
+            try {
+                const documents = await listAdminDocuments<Programme>("programmes");
+                if (active) setProgrammes(documents);
+            } catch (error) {
+                console.error("Error loading programmes through Admin API:", error);
+            }
+        };
+
+        void loadProgrammes();
+        const intervalId = window.setInterval(loadProgrammes, 5000);
 
         return () => {
+            active = false;
             unsubscribePassport();
-            unsubscribeProgrammes();
+            window.clearInterval(intervalId);
         };
     }, []);
 

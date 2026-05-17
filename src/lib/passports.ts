@@ -1,14 +1,4 @@
-import {
-  collection,
-  getDocs,
-  limit,
-  onSnapshot,
-  orderBy,
-  query,
-  type DocumentData,
-  type QueryDocumentSnapshot,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { listAdminDocuments } from "./api";
 
 export interface ScoreBreakdown {
   category: string;
@@ -33,21 +23,32 @@ export interface PassportData {
   updatedAt?: string;
 }
 
-const latestPassportQuery = () => query(collection(db, "passports"), orderBy("updatedAt", "desc"), limit(1));
-
-const mapPassport = (snapshot: QueryDocumentSnapshot<DocumentData>): PassportData => ({
-  id: snapshot.id,
-  ...(snapshot.data() as Omit<PassportData, "id">),
-});
+const sortByUpdatedAtDesc = (passports: PassportData[]) =>
+  passports.slice().sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
 
 export const getLatestPassport = async (): Promise<PassportData | null> => {
-  const snapshot = await getDocs(latestPassportQuery());
-  const latest = snapshot.docs[0];
-  return latest ? mapPassport(latest) : null;
+  const passports = await listAdminDocuments<PassportData>("passports");
+  return sortByUpdatedAtDesc(passports)[0] || null;
 };
 
-export const subscribeLatestPassport = (onChange: (passport: PassportData | null) => void) =>
-  onSnapshot(latestPassportQuery(), (snapshot) => {
-    const latest = snapshot.docs[0];
-    onChange(latest ? mapPassport(latest) : null);
-  });
+export const subscribeLatestPassport = (onChange: (passport: PassportData | null) => void) => {
+  let active = true;
+
+  const refresh = async () => {
+    try {
+      const passport = await getLatestPassport();
+      if (active) onChange(passport);
+    } catch (error) {
+      console.error("Error loading latest passport through Admin API:", error);
+      if (active) onChange(null);
+    }
+  };
+
+  void refresh();
+  const intervalId = window.setInterval(refresh, 5000);
+
+  return () => {
+    active = false;
+    window.clearInterval(intervalId);
+  };
+};

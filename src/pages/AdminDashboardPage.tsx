@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Activity, Users, Link2, Clock, HelpCircle, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
-import { doc, getDoc, setDoc, collection, getDocs, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase";
-import { runConflictDetection } from "../lib/api";
+import { getAdminDocument, listAdminDocuments, runConflictDetection, setAdminDocument } from "../lib/api";
 import type { PassportData } from "../lib/passports";
 
 export interface Conflict {
@@ -252,26 +250,16 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
   const detectConflicts = async () => {
     setConflictsLoading(true);
     try {
-      // Fetch admin data from Firebase
-      const adminDocRef = doc(db, "adminData", "dashboard");
-      const adminDocSnap = await getDoc(adminDocRef);
-      
       let fetchedAdminData: AdminData;
-      if (adminDocSnap.exists()) {
-        fetchedAdminData = adminDocSnap.data() as AdminData;
-      } else {
-        // Auto-seed Firebase if it's empty
-        await setDoc(adminDocRef, defaultAdminData);
+      try {
+        fetchedAdminData = await getAdminDocument<AdminData>("adminData", "dashboard");
+      } catch {
+        await setAdminDocument("adminData", "dashboard", defaultAdminData);
         fetchedAdminData = defaultAdminData as AdminData;
       }
       setAdminData(fetchedAdminData);
 
-      // Fetch programs from Firebase
-      const querySnapshot = await getDocs(collection(db, "programmes"));
-      const fetchedPrograms = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      })) as ProgrammeSummary[];
+      const fetchedPrograms = await listAdminDocuments<ProgrammeSummary>("programmes");
       setPrograms(fetchedPrograms);
 
       const result = await runConflictDetection();
@@ -300,23 +288,30 @@ export default function AdminDashboardPage({ onNavigate }: { onNavigate?: (view:
   }, []);
 
   useEffect(() => {
-    const unsubscribeProgrammes = onSnapshot(collection(db, "programmes"), (snapshot) => {
-      setPrograms(snapshot.docs.map(programmeDoc => ({
-        id: programmeDoc.id,
-        ...programmeDoc.data(),
-      })) as ProgrammeSummary[]);
-    });
+    let active = true;
 
-    const unsubscribePassports = onSnapshot(collection(db, "passports"), (snapshot) => {
-      setPassports(snapshot.docs.map(passportDoc => ({
-        id: passportDoc.id,
-        ...passportDoc.data(),
-      })) as PassportData[]);
-    });
+    const loadAdminCollections = async () => {
+      try {
+        const [programmeDocs, passportDocs] = await Promise.all([
+          listAdminDocuments<ProgrammeSummary>("programmes"),
+          listAdminDocuments<PassportData>("passports"),
+        ]);
+
+        if (active) {
+          setPrograms(programmeDocs);
+          setPassports(passportDocs);
+        }
+      } catch (error) {
+        console.error("Error loading admin collections through Admin API:", error);
+      }
+    };
+
+    void loadAdminCollections();
+    const intervalId = window.setInterval(loadAdminCollections, 5000);
 
     return () => {
-      unsubscribeProgrammes();
-      unsubscribePassports();
+      active = false;
+      window.clearInterval(intervalId);
     };
   }, []);
 
