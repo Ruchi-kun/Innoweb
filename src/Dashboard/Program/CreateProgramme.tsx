@@ -85,6 +85,11 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
 
     return (
         <main className="flex-1 flex flex-col h-full relative overflow-y-auto">
+            <div className="lines-container">
+                <div className="line-drop"></div>
+                <div className="line-drop"></div>
+                <div className="line-drop"></div>
+            </div>
 
             {/* Top Header/Nav */}
             <header className="flex justify-end items-center p-6 pb-2 shrink-0">
@@ -144,7 +149,7 @@ export default function CreateProgramme({ onNavigate }: CreateProgrammeProps) {
                             />
                         </div>
 
-                        {/* Description */}
+                        {/* Description test */}
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1.5">Description</label>
                             <textarea
